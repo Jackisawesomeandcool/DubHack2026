@@ -25,7 +25,7 @@ _load_dotenv(BACKEND_DIR / ".env")
 
 # AI provider: Gemini (default). xAI Grok still works if XAI_API_KEY is set instead.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 GEMINI_VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "").strip() or GEMINI_MODEL
 GEMINI_BASE_URL = os.environ.get("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
 

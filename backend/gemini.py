@@ -36,11 +36,15 @@ class GeminiError(Exception):
     pass
 
 
+_model_override: dict[str, str] = {}  # model -> replacement Google told us to use
+
+
 def _url(model: str) -> str:
     return f"{config.GEMINI_BASE_URL}/models/{model}:generateContent"
 
 
 def _post(model: str, payload: dict, timeout: int = 120) -> dict:
+    model = _model_override.get(model, model)
     req = urllib.request.Request(_url(model), data=json.dumps(payload).encode("utf-8"),
                                  headers={"Content-Type": "application/json", "x-goog-api-key": config.GEMINI_API_KEY},
                                  method="POST")
@@ -48,8 +52,18 @@ def _post(model: str, payload: dict, timeout: int = 120) -> dict:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as err:
-        detail = err.read().decode("utf-8", "replace")[:300]
-        raise GeminiError(f"Gemini API returned {err.code}: {detail}") from err
+        detail = err.read().decode("utf-8", "replace")
+        try:
+            message = json.loads(detail)["error"]["message"]
+        except Exception:  # noqa: BLE001
+            message = detail[:300]
+        # Retired model? Google names the replacement — switch to it and retry once.
+        m = re.search(r"use models/([\w.\-]+)", message)
+        if err.code == 404 and m and m.group(1) != model:
+            print(f"[gemini] model {model} unavailable; switching to {m.group(1)}", file=sys.stderr)
+            _model_override[model] = m.group(1)
+            return _post(model, payload, timeout)
+        raise GeminiError(f"Gemini API returned {err.code}: {message[:200]}") from err
     except (urllib.error.URLError, TimeoutError) as err:
         raise GeminiError(f"Could not reach Gemini API: {err}") from err
 

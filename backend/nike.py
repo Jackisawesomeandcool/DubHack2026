@@ -13,6 +13,10 @@ import urllib.parse
 import urllib.request
 
 import config
+import time
+
+_failures = 0
+_disabled_until = 0.0
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 CHANNEL = "d9a5bc42-4b9c-4976-858a-f159cf99c647"
@@ -52,7 +56,10 @@ def _walk_products(node, out: list):
 
 def search(term: str, count: int = 12) -> list[dict]:
     """Products for a search term, in our product shape (image fields raw)."""
+    global _failures, _disabled_until
     if "nike.com" not in ",".join(config.ALLOWED_DOMAINS) and config.ALLOWED_DOMAINS:
+        return []
+    if time.time() < _disabled_until:
         return []
     endpoint = (
         "/product_feed/rollup_threads/v2?filter=marketplace(US)&filter=language(en)"
@@ -69,8 +76,14 @@ def search(term: str, count: int = 12) -> list[dict]:
         with urllib.request.urlopen(req, timeout=6) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except Exception as err:  # noqa: BLE001
-        print(f"[nike] search failed ({err}); falling back to Grok", file=sys.stderr)
+        _failures += 1
+        if _failures >= 2:
+            _disabled_until = time.time() + 600
+            print(f"[nike] search endpoint unavailable ({err}); using AI search for the next 10 min", file=sys.stderr)
+        else:
+            print(f"[nike] search failed ({err}); falling back to AI search", file=sys.stderr)
         return []
+    _failures = 0
 
     raw: list = []
     _walk_products(data, raw)
