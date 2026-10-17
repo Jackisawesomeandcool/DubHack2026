@@ -1,8 +1,8 @@
-"""Demo curation used when XAI_API_KEY is not configured (local testing).
-
-All entries are real products from real brands with typical retail prices.
-Images are left empty so the frontend renders a clean garment cutout instead
-of hotlinking retailer assets.
+"""Offline curation used ONLY when XAI_API_KEY is not configured, so the UI
+can be exercised without network access. Entries are real products from real
+brands, but without Grok's live search there are no listing URLs to pull
+photos from, so the frontend renders garment cutouts. Set a key for real
+listings with real retailer images.
 """
 
 import random

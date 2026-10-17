@@ -233,7 +233,11 @@ button:focus-visible, input:focus-visible {
   user-select: none;
   pointer-events: none;
 }
-.item__art img { mix-blend-mode: multiply; }
+.item__art img {
+  max-height: calc(var(--u) * 46);
+  object-fit: contain;
+  mix-blend-mode: multiply; /* white studio backgrounds dissolve into the canvas */
+}
 
 .item:hover,
 .item.is-selected {

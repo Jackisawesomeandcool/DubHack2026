@@ -25,11 +25,11 @@ MAX_PROMPT = 400
 
 
 def _curate(prompt: str) -> tuple[list[dict], str]:
+    """Grok with live web search when a key is configured. The offline catalog
+    is only used when there is no key at all (local UI testing), never as a
+    silent substitute for real search results."""
     if config.XAI_API_KEY:
-        try:
-            return grok.curate(prompt), "grok"
-        except grok.GrokError as err:
-            print(f"[grok] {err} — falling back to demo catalog", file=sys.stderr)
+        return grok.curate(prompt), "grok"
     return catalog.curate(prompt), "demo"
 
 
@@ -83,7 +83,11 @@ class Handler(BaseHTTPRequestHandler):
             prompt = str((body or {}).get("prompt", "")).strip()[:MAX_PROMPT]
             if not prompt:
                 return self._json(HTTPStatus.BAD_REQUEST, {"error": "prompt required"})
-            items, source = _curate(prompt)
+            try:
+                items, source = _curate(prompt)
+            except grok.GrokError as err:
+                print(f"[grok] {err}", file=sys.stderr)
+                return self._json(HTTPStatus.BAD_GATEWAY, {"error": str(err)})
             return self._json(HTTPStatus.OK, {"items": items, "source": source})
 
         if self.path == "/api/share":

@@ -1,7 +1,7 @@
 """Product shape shared by the Grok path and the demo catalog.
 
 Public fields (spec): name, brand, price, image, stock.
-Internal fields (needed for layout only): category, color.
+Internal fields: url (listing page the image is pulled from), category, color (layout).
 """
 
 import re
@@ -46,6 +46,11 @@ def _image(value) -> str:
     return value if value.startswith("https://") and len(value) < 2048 else ""
 
 
+def _url(value) -> str:
+    value = str(value or "").strip()
+    return value if value.startswith("http") and len(value) < 2048 else ""
+
+
 def normalize(raw: dict) -> dict | None:
     if not isinstance(raw, dict):
         return None
@@ -59,6 +64,7 @@ def normalize(raw: dict) -> dict | None:
         "brand": brand,
         "price": _price(raw.get("price")),
         "image": _image(raw.get("image")),
+        "url": _url(raw.get("url")),
         "stock": _stock(raw.get("stock")),
         "category": _category(raw.get("category")),
         "color": color if _HEX.match(color) else "#b9b4aa",
