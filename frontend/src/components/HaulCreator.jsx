@@ -25,6 +25,7 @@ export default function HaulCreator() {
 
   // Swap session for the selected piece: alternatives are previewed on the
   // board and only kept when the user says so.
+  const [dragOut, setDragOut] = useState(null); // piece currently held outside the board
   const [swap, setSwap] = useState(null); // { uid, original, alts, index, loading, error }
   const swapRef = useRef(null);
   swapRef.current = swap;
@@ -166,7 +167,7 @@ export default function HaulCreator() {
       <header className="bar">
         <FitSelector fits={fits} current={current} onSelect={(i) => { revertSwap(swapRef.current); setSwap(null); setCurrent(i); }} onAdd={loadingFit ? undefined : addFit} />
         <div className="bar__right">
-          <HaulTotal total={total} />
+          <HaulTotal total={total} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
         </div>
       </header>
@@ -181,6 +182,7 @@ export default function HaulCreator() {
         onMove={(item, x, y) => update(current, (f) => moveItem(f, item, x, y))}
         onRemove={(item) => { if (swap?.uid === item.uid) setSwap(null); update(current, (f) => removeItem(f, item)); }}
         onSelectionChange={onSelectionChange}
+        onDragOutChange={setDragOut}
       />
 
       <SearchHistory entries={history} activeId={activeId} onSelect={setActiveId} />

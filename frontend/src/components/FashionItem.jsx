@@ -22,7 +22,7 @@ export default function FashionItem({ item, zIndex, selected, draggable, swapUi,
   }
 
   function onPointerDown(e) {
-    if (!draggable || e.button !== 0) return;
+    if (e.button !== 0) return;
     const canvas = canvasRef.current?.getBoundingClientRect();
     if (!canvas) return;
     drag.current = { startX: e.clientX, startY: e.clientY, x: item.x, y: item.y, canvas, moved: false };
@@ -31,12 +31,12 @@ export default function FashionItem({ item, zIndex, selected, draggable, swapUi,
 
   function onPointerMove(e) {
     const d = drag.current;
-    if (!d) return;
+    if (!d || !draggable) return;
     const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
     if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     if (!d.moved) { d.moved = true; setDragging(true); }
     const out = isOutside(e, d.canvas);
-    if (out !== d.outside) { d.outside = out; setOutside(out); onDragOut?.(out); }
+    if (out !== d.outside) { d.outside = out; setOutside(out); onDragOut?.(out ? item : null); }
     onMove(item, d.x + (dx / d.canvas.width) * 100, d.y + (dy / d.canvas.height) * 100);
   }
 
@@ -45,7 +45,7 @@ export default function FashionItem({ item, zIndex, selected, draggable, swapUi,
     drag.current = null;
     setDragging(false);
     setOutside(false);
-    onDragOut?.(false);
+    onDragOut?.(null);
     if (!d) return;
     if (!d.moved) { if (!cancelled) onSelect(e.currentTarget); return; }
     if (d.outside && !cancelled) { onRemove(item); return; }

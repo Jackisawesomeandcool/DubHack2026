@@ -12,13 +12,14 @@ export default function FashionCanvas({
   onMove,
   onRemove,
   onSelectionChange,
+  onDragOutChange,
   swapUi = null,
   loading = false,
   hint = '',
 }) {
   const ref = useRef(null);
   const [selected, setSelected] = useState(null); // { uid, anchor }
-  const [draggingOut, setDraggingOut] = useState(false);
+  const [draggingOut, setDraggingOut] = useState(null); // the piece held outside the board
 
   useEffect(() => {
     const el = ref.current;
@@ -54,7 +55,7 @@ export default function FashionCanvas({
             canvasRef={ref}
             onMove={onMove}
             onRemove={(it) => { onRemove?.(it); if (selected?.uid === it.uid) close(); }}
-            onDragOut={setDraggingOut}
+            onDragOut={(it) => { setDraggingOut(it); onDragOutChange?.(it); }}
             onSelect={(anchor) => setSelected((cur) => (cur?.uid === item.uid ? null : { uid: item.uid, anchor }))}
           />
         ))}
