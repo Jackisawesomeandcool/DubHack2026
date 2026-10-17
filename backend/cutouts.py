@@ -28,7 +28,7 @@ except Exception:  # noqa: BLE001
     _HAVE_REMBG = False
 
 CUTOUT_DIR = config.DATA_DIR / "cutouts"
-MAX_CANDIDATES = 5
+MAX_CANDIDATES = 8
 MAX_SIDE = 900
 
 _lock = threading.Lock()
@@ -162,8 +162,14 @@ def resolve(item: dict) -> None:
             for c in images.candidates_from_page(item["url"]):
                 if c not in cands:
                     cands.append(c)
-        cands = [c for c in cands[:MAX_CANDIDATES * 2] if images.image_ok(c)][:MAX_CANDIDATES]
+        from concurrent.futures import ThreadPoolExecutor
+        cands = cands[: MAX_CANDIDATES * 2]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            ok = list(pool.map(images.image_ok, cands))
+        cands = [c for c, good in zip(cands, ok) if good][:MAX_CANDIDATES]
         idx = pick_product_only(cands)
+        if idx < 0:
+            print(f"[cutouts] no product-only photo among {len(cands)} for {item.get('name')}", file=sys.stderr)
         if idx < 0:
             item["image"] = ""
             return

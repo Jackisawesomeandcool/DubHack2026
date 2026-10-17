@@ -46,8 +46,8 @@ export default function HaulCreator() {
     try {
       const { items } = await randomFit();
       update(index, () => ({ items: withPositions(items) }));
-    } catch {
-      setFitError('couldn’t load a fit — try again');
+    } catch (err) {
+      setFitError(`couldn’t load a fit — ${err.message || 'try again'}`);
     } finally {
       setLoadingFit(false);
     }
@@ -58,6 +58,9 @@ export default function HaulCreator() {
     booted.current = true;
     loadRandom(0);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Click the error message to try loading again.
+  const retry = () => !loadingFit && fit.items.length === 0 && loadRandom(current);
 
   async function find(prompt) {
     const id = nextId.current++;
@@ -178,6 +181,7 @@ export default function HaulCreator() {
         editable
         loading={loadingFit}
         hint={fitError}
+        onHintClick={retry}
         swapUi={swapUi}
         onMove={(item, x, y) => update(current, (f) => moveItem(f, item, x, y))}
         onRemove={(item) => { if (swap?.uid === item.uid) setSwap(null); update(current, (f) => removeItem(f, item)); }}

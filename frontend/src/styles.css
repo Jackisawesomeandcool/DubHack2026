@@ -249,7 +249,11 @@ button:focus-visible, input:focus-visible {
   letter-spacing: 0.02em;
   pointer-events: none;
   animation: fade var(--mid) var(--ease);
+  padding: 0 40px;
+  text-align: center;
 }
+.canvas__hint.is-clickable { pointer-events: auto; cursor: pointer; }
+.canvas__hint.is-clickable:hover { color: var(--ink); }
 
 .canvas__loading {
   position: absolute;

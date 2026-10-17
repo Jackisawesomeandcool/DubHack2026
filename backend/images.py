@@ -30,16 +30,24 @@ def _get(url: str, timeout: int, byte_range: str | None = None):
     return urllib.request.urlopen(req, timeout=timeout)
 
 
+_IMG_URL = re.compile(r"https?://[^\s\"'<>\\]+?\.(?:jpe?g|png|webp)(?:\?[^\s\"'<>\\]*)?", re.I)
+
+
 class _MetaParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.meta: dict[str, str] = {}
         self.jsonld: list[str] = []
+        self.imgs: list[str] = []
         self._in_jsonld = False
         self._buf: list[str] = []
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
+        if tag == "img":
+            for key in ("src", "data-src", "data-srcset", "srcset"):
+                if a.get(key):
+                    self.imgs.append(a[key].split(",")[0].split(" ")[0])
         if tag == "meta":
             key = (a.get("property") or a.get("name") or "").lower()
             if key and a.get("content") and key not in self.meta:
@@ -111,6 +119,21 @@ def candidates_from_page(url: str) -> list[str]:
         if parser.meta.get(key):
             out.append(parser.meta[key])
     out.extend(_jsonld_images(parser.jsonld))
+
+    # Every product view the page carries (gallery images, embedded JSON), so a
+    # product-only angle can be chosen even when the hero shot is on-model.
+    host_hint = urllib.parse.urlparse(out[0]).netloc if out else ""
+    extra = parser.imgs + _IMG_URL.findall(html)
+    extra = [unescape(u).replace("\\/", "/") for u in extra]
+    if host_hint:
+        extra = [u for u in extra if host_hint in u] + [u for u in extra if host_hint not in u]
+    skip = ("logo", "icon", "sprite", "favicon", "swatch", "badge", "avatar", "pixel", "1x1")
+    for u in extra:
+        if any(k in u.lower() for k in skip):
+            continue
+        out.append(u)
+        if len(out) >= 14:
+            break
 
     # Shopify-style stores expose the product JSON next to the page.
     if "/products/" in final_url and not out:

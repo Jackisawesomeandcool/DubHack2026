@@ -16,6 +16,7 @@ export default function FashionCanvas({
   swapUi = null,
   loading = false,
   hint = '',
+  onHintClick,
 }) {
   const ref = useRef(null);
   const [selected, setSelected] = useState(null); // { uid, anchor }
@@ -63,7 +64,9 @@ export default function FashionCanvas({
 
       {editable && <div className="canvas__dropout" aria-hidden="true">release to remove</div>}
 
-      {hint && items.length === 0 && !loading && <p className="canvas__hint">{hint}</p>}
+      {hint && items.length === 0 && !loading && (
+        <p className={`canvas__hint${onHintClick ? ' is-clickable' : ''}`} onClick={onHintClick}>{hint}</p>
+      )}
 
       {loading && (
         <div className="canvas__loading" aria-label="Loading">

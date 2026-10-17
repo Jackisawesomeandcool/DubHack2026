@@ -53,8 +53,20 @@ def _write(pool: list) -> None:
 
 
 def build_one() -> dict:
-    prompt = random.choice(STYLES)
-    items = grok.suggest(prompt, count=6)
+    """Build a random fit; one retry with a different style if the first
+    attempt yields too few product-only pieces."""
+    last: grok.GrokError | None = None
+    for prompt in random.sample(STYLES, 2):
+        try:
+            return _build(prompt)
+        except grok.GrokError as err:
+            print(f"[fits] build '{prompt}' failed: {err}", file=sys.stderr)
+            last = err
+    raise last or grok.GrokError("Could not build a fit")
+
+
+def _build(prompt: str) -> dict:
+    items = grok.suggest(prompt, count=7)
     # One piece per category: keep the first of each.
     seen, picked = set(), []
     for it in items:
