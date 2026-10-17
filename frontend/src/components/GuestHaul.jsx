@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import FitSelector from './FitSelector.jsx';
 import HaulTotal from './HaulTotal.jsx';
 import FashionCanvas from './FashionCanvas.jsx';
+import DateTag from './DateTag.jsx';
 import { loadShare } from '../lib/api.js';
 import { fitTotal, withPositions } from '../lib/haul.js';
 
@@ -26,6 +27,7 @@ export default function GuestHaul({ shareId }) {
         <FitSelector fits={fits || []} current={current} onSelect={setCurrent} />
         <div className="bar__right">
           <HaulTotal total={total} />
+          <DateTag />
         </div>
       </header>
 
