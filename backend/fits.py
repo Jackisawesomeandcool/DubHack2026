@@ -10,6 +10,7 @@ import json
 import random
 import sys
 import threading
+import time
 
 import config
 import grok
@@ -101,7 +102,9 @@ def ensure_pool() -> None:
 
 
 def take() -> dict:
-    """Return a random fit immediately if one is pooled, else build one now."""
+    """Return a random fit immediately if one is pooled, else build one now.
+    The background refill only starts after a synchronous build, so the first
+    load isn't competing with it for the API."""
     with _lock:
         pool = _read()
         if pool:
@@ -109,8 +112,20 @@ def take() -> dict:
             _write(pool)
         else:
             fit = None
-    ensure_pool()
+    if fit is None and _refilling:
+        # A background build is already running — wait for it instead of
+        # starting a second search in parallel.
+        for _ in range(240):
+            time.sleep(0.5)
+            with _lock:
+                pool = _read()
+                if pool:
+                    fit = pool.pop(0)
+                    _write(pool)
+                    break
+            if not _refilling:
+                break
     if fit is None:
         fit = build_one()
-        ensure_pool()
+    ensure_pool()
     return fit

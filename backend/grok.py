@@ -8,6 +8,7 @@ images.py. The API key never leaves this process.
 
 import json
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -26,7 +27,8 @@ Hard rules:
   and brand from the listing.
 - url: the direct product page URL (the page for that specific item, not a search or
   category page).
-- image: the direct URL of the main product photo from that page if you saw one; otherwise "".
+- image: the direct URL of the main product photo (the <meta property="og:image"> or main
+  product image URL on the listing page). Always try to include it; use "" only if none was visible.
 - price: current USD price as a number.
 - stock: "in_stock" unless the page says sold out / unavailable.
 - category: one of {", ".join(CATEGORIES)}.
@@ -172,11 +174,13 @@ def _chat_completions(user: str) -> list:
 def suggest(prompt: str, category: str | None = None, exclude: list[str] | None = None, count: int | None = None) -> list[dict]:
     count = count or (4 if category else 6)
     user = _user_message(prompt, category, exclude or [], count)
+    t0 = time.time()
     try:
         raw = _responses_with_search(user)
     except GrokError as err:
         print(f"[grok] web search path failed ({err}); retrying without search", file=sys.stderr)
         raw = _chat_completions(user)
+    t1 = time.time()
 
     items = normalize_list(raw)
     if category:
@@ -186,7 +190,10 @@ def suggest(prompt: str, category: str | None = None, exclude: list[str] | None 
 
     # Only real photos pulled from the listing itself; anything unverified is dropped.
     images.resolve_all(items)
-    items = [it for it in items if it["image"]]
+    t2 = time.time()
+    kept = [it for it in items if it["image"]]
+    print(f"[grok] search {t1 - t0:.1f}s · photos {t2 - t1:.1f}s · {len(kept)}/{len(items)} with verified photo", file=sys.stderr)
+    items = kept
     if not items:
         raise GrokError("No options with a verifiable product photo")
     return items

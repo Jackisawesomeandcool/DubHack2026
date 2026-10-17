@@ -17,8 +17,8 @@ from html import unescape
 from html.parser import HTMLParser
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-PAGE_TIMEOUT = 8
-IMAGE_TIMEOUT = 5
+PAGE_TIMEOUT = 6
+IMAGE_TIMEOUT = 4
 MAX_PAGE_BYTES = 2_000_000
 
 
@@ -147,16 +147,20 @@ def image_ok(url: str) -> bool:
 
 
 def resolve(item: dict) -> None:
-    """Set item['image'] to a verified photo from the product's own page."""
-    tried: list[str] = []
+    """Set item['image'] to a verified photo of the product.
+
+    Fast path: the photo URL Grok saw on the listing (one small ranged GET).
+    Slow path: open the product page and read the image it declares.
+    """
+    direct = item.get("image", "")
+    if direct and image_ok(direct):
+        item["image"] = direct
+        return
     if item.get("url"):
-        tried.extend(candidates_from_page(item["url"]))
-    if item.get("image"):
-        tried.append(item["image"])
-    for cand in tried:
-        if image_ok(cand):
-            item["image"] = cand
-            return
+        for cand in candidates_from_page(item["url"]):
+            if image_ok(cand):
+                item["image"] = cand
+                return
     item["image"] = ""
 
 
