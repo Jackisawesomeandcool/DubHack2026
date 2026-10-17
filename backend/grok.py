@@ -34,6 +34,13 @@ Hard rules:
 - color: the product's dominant color as a 6-digit hex like "#2f4766".
 Return only JSON matching the schema."""
 
+if config.ALLOWED_DOMAINS:
+    SYSTEM_PROMPT += (
+        f"\n\nSTORE RESTRICTION: every product must be a listing on {', '.join(config.ALLOWED_DOMAINS)} "
+        "and url must point to a product page on that site. Interpret the style prompt using only "
+        "what that store sells (e.g. its own apparel, footwear, bags, hats, socks and accessories)."
+    )
+
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -105,7 +112,11 @@ def _responses_with_search(prompt: str) -> list:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        "tools": [{"type": "web_search"}],
+        "tools": [
+            {"type": "web_search", "filters": {"allowed_domains": config.ALLOWED_DOMAINS}}
+            if config.ALLOWED_DOMAINS
+            else {"type": "web_search"}
+        ],
         "text": {
             "format": {"type": "json_schema", "name": "haul", "schema": SCHEMA, "strict": True}
         },

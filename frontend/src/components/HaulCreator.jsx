@@ -9,14 +9,14 @@ import { MAX_FITS, emptyFit, fitTotal } from '../lib/haul.js';
 
 // A random one of these seeds the first fit so the page opens on a real haul.
 const STARTER_PROMPTS = [
-  'late 2000s downtown outfit with baggy jeans and boots',
-  'quiet luxury neutral layers for a city weekend',
-  'gorpcore trail-to-cafe fit with a fleece and hiking shoes',
+  'late 2000s downtown fit with baggy pants and retro sneakers',
+  'all-black minimal fit with a windbreaker and low-tops',
+  'gorpcore trail fit with a fleece and ACG shoes',
   'y2k streetwear with cargo pants and chunky sneakers',
-  'coastal summer linen fit with sandals and a tote',
-  'dark academia fall look with loafers and a wool coat',
-  'skater fit with wide-leg denim and a graphic tee',
-  'minimal all-black fit with leather boots',
+  'summer court fit with shorts, a tank and white sneakers',
+  'cozy fall fit with a tech fleece hoodie and dunks',
+  'skater fit with wide-leg pants and a graphic tee',
+  'clean athleisure fit in earth tones',
 ];
 const STARTER_PROMPT = STARTER_PROMPTS[Math.floor(Math.random() * STARTER_PROMPTS.length)];
 
