@@ -67,7 +67,7 @@ Without `rembg` installed the server warns at startup and falls back to the chos
 **Random fits are pre-built.** On startup the backend builds a small pool of complete random fits in
 the background (stored in `backend/data/fits.json`), so `GET /api/random-fit` returns instantly and
 the pool refills after each one is used. Only the very first load on a fresh install waits for a live
-search (~10–40 s). Finder searches run live and show a shimmer row while they work.
+search (~10–40 s). Finder searches stream: the products appear in the tray as soon as Grok finds them (as shimmering placeholders), and each one fills in the moment its cutout is ready.
 
 An xAI key is required; there is no offline mode.
 

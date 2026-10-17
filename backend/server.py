@@ -70,6 +70,29 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return data if isinstance(data, dict) else None
 
+    def _stream_suggest(self, prompt, category, exclude):
+        """NDJSON stream: products first, then one line per finished cutout."""
+        try:
+            gen = grok.suggest_stream(prompt, category, exclude)
+            first = next(gen)
+        except (grok.GrokError, StopIteration) as err:
+            print(f"[grok] {err}", file=sys.stderr)
+            return self._json(HTTPStatus.BAD_GATEWAY, {"error": str(err) or "no results"})
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self._cors()
+        self.end_headers()
+        try:
+            self.wfile.write((json.dumps(first) + "\n").encode("utf-8"))
+            self.wfile.flush()
+            for ev in gen:  # lazily, so each cutout ships the moment it's ready
+                self.wfile.write((json.dumps(ev) + "\n").encode("utf-8"))
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # client went away
+
     def log_message(self, fmt, *args):  # quieter logs
         print(f"{self.command} {self.path} {args[1] if len(args) > 1 else ''}", file=sys.stderr)
 
@@ -90,12 +113,7 @@ class Handler(BaseHTTPRequestHandler):
             exclude = [str(n)[:120] for n in body.get("exclude", []) if isinstance(n, str)][:12]
             if not _require_key(self):
                 return None
-            try:
-                items = grok.suggest(prompt, category, exclude)
-            except grok.GrokError as err:
-                print(f"[grok] {err}", file=sys.stderr)
-                return self._json(HTTPStatus.BAD_GATEWAY, {"error": str(err)})
-            return self._json(HTTPStatus.OK, {"items": items})
+            return self._stream_suggest(prompt, category, exclude)
 
         if self.path == "/api/share":
             body = self._read_json()
@@ -162,6 +180,7 @@ def main() -> None:
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
     if not cutouts.available():
         print("WARNING: rembg not installed — run `pip install -r requirements.txt` for transparent cutouts", file=sys.stderr)
+    cutouts.warm()
     fits.ensure_pool()
     ThreadingHTTPServer((config.HOST, config.PORT), Handler).serve_forever()
 

@@ -63,7 +63,8 @@ export default function HaulCreator() {
     setHistory((prev) => [{ id, prompt, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
     setActiveId(id);
     try {
-      const { items } = await suggest(prompt, null, fit.items.map((i) => i.name));
+      const items = await suggest(prompt, null, fit.items.map((i) => i.name), (partial) =>
+        patchHistory(id, { options: partial, loading: false }));
       patchHistory(id, { options: items, loading: false });
     } catch {
       patchHistory(id, { loading: false, error: 'couldn’t find that — try again' });
@@ -87,9 +88,11 @@ export default function HaulCreator() {
     setActiveId(null);
     try {
       const prompt = `${item.category === 'bottom' ? 'pants' : item.category} similar in style to ${item.name}`;
-      const { items } = await suggest(prompt, item.category, fit.items.map((i) => i.name));
-      const alts = items.filter((a) => !sameProduct(a, item));
-      setSwap((s) => (s && s.uid === item.uid ? { ...s, alts, loading: false } : s));
+      const apply = (list) => {
+        const alts = list.filter((a) => !sameProduct(a, item));
+        setSwap((s) => (s && s.uid === item.uid ? { ...s, alts, loading: false } : s));
+      };
+      apply(await suggest(prompt, item.category, fit.items.map((i) => i.name), apply));
     } catch {
       setSwap((s) => (s && s.uid === item.uid ? { ...s, loading: false, error: 'couldn’t find alternatives' } : s));
     }
@@ -132,10 +135,11 @@ export default function HaulCreator() {
     });
   }
 
+  const readyAlts = swap ? swap.alts.filter((a) => !a.pending) : [];
   const swapUi = swap && {
     dirty: swap.index !== -1,
-    canPrev: swap.alts.length > 0,
-    canNext: swap.alts.length > 0,
+    canPrev: readyAlts.length > 0,
+    canNext: readyAlts.length > 0,
     loading: swap.loading,
     onPrev: () => previewAt(swap.index <= -1 ? swap.alts.length - 1 : swap.index - 1),
     onNext: () => previewAt(swap.index >= swap.alts.length - 1 ? -1 : swap.index + 1),

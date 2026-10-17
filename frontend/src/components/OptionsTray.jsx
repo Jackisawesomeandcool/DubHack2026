@@ -4,6 +4,13 @@ import { formatPrice, itemKey, sameProduct } from '../lib/haul.js';
 function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
+  if (item.pending) {
+    return (
+      <div className="chip chip--pending" aria-label={`Finding photo for ${item.name}`}>
+        <span className="chip__pendingname">{item.name}</span>
+      </div>
+    );
+  }
   const isPreview = previewing && sameProduct(previewing, item);
   const canAdd = !onBoard && !full;
   const label = isPreview ? 'Trying' : onBoard ? 'On board' : swapMode ? 'Try' : 'Add';

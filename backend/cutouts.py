@@ -41,6 +41,12 @@ def available() -> bool:
     return _HAVE_REMBG
 
 
+def warm() -> None:
+    """Load the segmentation model in the background so the first cutout is fast."""
+    if _HAVE_REMBG:
+        threading.Thread(target=_get_session, daemon=True).start()
+
+
 def _load_cache() -> dict:
     global _cache
     if _cache is None:

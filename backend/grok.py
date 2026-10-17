@@ -171,7 +171,15 @@ def _chat_completions(user: str) -> list:
         raise GrokError("Unexpected xAI response shape") from err
 
 
-def suggest(prompt: str, category: str | None = None, exclude: list[str] | None = None, count: int | None = None) -> list[dict]:
+def suggest_stream(prompt: str, category: str | None = None, exclude: list[str] | None = None, count: int | None = None):
+    """Generator of events:
+        {"items": [...]}               -- products found (no images yet)
+        {"index": i, "image": "..."}   -- cutout ready for item i
+        {"index": i, "drop": true}     -- no product-only photo; drop item i
+        {"done": true}
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     count = count or (4 if category else 6)
     user = _user_message(prompt, category, exclude or [], count)
     t0 = time.time()
@@ -188,12 +196,39 @@ def suggest(prompt: str, category: str | None = None, exclude: list[str] | None 
     if not items:
         raise GrokError("Grok returned no usable products")
 
-    # Only real product-only photos (no people), cut out as PNGs; others are dropped.
-    cutouts.resolve_all(items)
-    t2 = time.time()
-    kept = [it for it in items if it["image"]]
-    print(f"[grok] search {t1 - t0:.1f}s · photos {t2 - t1:.1f}s · {len(kept)}/{len(items)} product-only cutouts", file=sys.stderr)
-    items = kept
+    # Ship the products right away; photos follow as each one is cut out.
+    yield {"items": [{**it, "image": ""} for it in items]}
+
+    kept = 0
+    with ThreadPoolExecutor(max_workers=min(6, len(items))) as pool:
+        futures = {pool.submit(cutouts.resolve, it): i for i, it in enumerate(items)}
+        for fut in as_completed(futures):
+            i = futures[fut]
+            try:
+                fut.result()
+            except Exception as err:  # noqa: BLE001
+                print(f"[cutouts] {err}", file=sys.stderr)
+                items[i]["image"] = ""
+            if items[i]["image"]:
+                kept += 1
+                yield {"index": i, "image": items[i]["image"]}
+            else:
+                yield {"index": i, "drop": True}
+    print(f"[grok] search {t1 - t0:.1f}s · photos {time.time() - t1:.1f}s · {kept}/{len(items)} product-only cutouts", file=sys.stderr)
+    yield {"done": True}
+
+
+def suggest(prompt: str, category: str | None = None, exclude: list[str] | None = None, count: int | None = None) -> list[dict]:
+    """Non-streaming convenience: the finished list of products with cutouts."""
+    items: list[dict] = []
+    for ev in suggest_stream(prompt, category, exclude, count):
+        if "items" in ev:
+            items = ev["items"]
+        elif "image" in ev:
+            items[ev["index"]]["image"] = ev["image"]
+        elif ev.get("drop"):
+            items[ev["index"]]["image"] = ""
+    items = [it for it in items if it["image"]]
     if not items:
-        raise GrokError("No options with a verifiable product photo")
+        raise GrokError("No options with a product-only photo")
     return items

@@ -493,6 +493,18 @@ button:focus-visible, input:focus-visible {
 .chip.is-preview { background: #fff; box-shadow: 0 0 0 2px var(--ink), var(--shadow-md); }
 .chip__badge.is-preview { background: var(--ink); color: var(--accent-ink); font-size: 9px; pointer-events: none; }
 .tray__note { margin: 6px 8px 0; font-size: 11px; color: var(--ink-3); letter-spacing: 0.02em; }
+.chip--pending {
+  display: grid; place-items: end start;
+  padding: 10px;
+  background: linear-gradient(90deg, #f1eee8 25%, #f8f6f2 50%, #f1eee8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+.chip__pendingname {
+  font-size: 10px; font-weight: 700; line-height: 1.25;
+  color: var(--ink-3);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
 .chip--skeleton {
   background: linear-gradient(90deg, #f1eee8 25%, #f8f6f2 50%, #f1eee8 75%);
   background-size: 200% 100%;
