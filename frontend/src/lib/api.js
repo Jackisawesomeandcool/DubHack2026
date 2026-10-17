@@ -61,6 +61,13 @@ export function loadShare(id) {
   return request(`/api/share/${encodeURIComponent(id)}`);
 }
 
+// Fire-and-forget: ask the backend to re-verify stock for products in play.
+export function seen(items) {
+  const urls = items.map((i) => i.url).filter(Boolean);
+  if (!urls.length) return;
+  fetch('/api/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls }) }).catch(() => {});
+}
+
 export function health() {
   return request('/api/health');
 }

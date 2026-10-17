@@ -49,17 +49,27 @@ def stream(prompt: str, category: str | None = None, exclude: list[str] | None =
            models: bool = False, count: int = LIVE_COUNT, local_first: bool = True):
     exclude = exclude or []
     have: list[dict] = []
+    t0 = time.time()
 
     if local_first:
+        # 1. Identical recent search → its products, instantly.
+        cached = catalog.cached_results(prompt, category, models, exclude)
+        if cached:
+            print(f"[finder] result cache hit {1000 * (time.time() - t0):.0f}ms · {len(cached)} items · live skipped", file=sys.stderr)
+            yield {"items": cached[:count]}
+            yield {"done": True}
+            return
+        # 2. Keyword/tag match against the catalog.
         hits = catalog.search(prompt, category, models, exclude, limit=count)
-        for h in hits:
-            h.pop("tags", None); h.pop("seen", None); h.pop("models", None)
         if hits:
             have.extend(hits)
             yield {"items": hits}
+        print(f"[finder] catalog {1000 * (time.time() - t0):.0f}ms · {len(hits)} hits", file=sys.stderr)
 
     want = count - len(have) + (2 if have else 0)
     if want <= 0 and have:
+        catalog.cache_results(prompt, category, models, have)
+        print(f"[finder] served from catalog · live skipped", file=sys.stderr)
         yield {"done": True}
         return
 
@@ -94,8 +104,9 @@ def stream(prompt: str, category: str | None = None, exclude: list[str] | None =
                 yield {"index": base + i, "image": live[i]["image"]}
             else:
                 yield {"index": base + i, "drop": True}
-    print(f"[finder] {source}: photos {time.time() - t1:.1f}s · {len(kept)}/{len(live)} cutouts", file=sys.stderr)
-    catalog.add(kept, models, prompt)
+    print(f"[finder] live {source}: search {t1 - t0:.1f}s · photos {time.time() - t1:.1f}s · {len(kept)}/{len(live)} cutouts · catalog hits {len(have)}", file=sys.stderr)
+    catalog.upsert(kept, models, prompt, source)
+    catalog.cache_results(prompt, category, models, have + kept)
     yield {"done": True}
 
 

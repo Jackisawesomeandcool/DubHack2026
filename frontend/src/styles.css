@@ -104,6 +104,22 @@ button:focus-visible, input:focus-visible {
   color: var(--accent-ink);
 }
 .fits__tab.is-active:hover { background: var(--accent); }
+.fits__item { position: relative; display: flex; align-items: center; }
+.fits__del {
+  position: absolute;
+  top: -6px; right: -4px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--line);
+  animation: popIn 160ms var(--ease);
+  transition: background var(--fast), color var(--fast), transform var(--fast) var(--ease);
+}
+.fits__del:hover { background: var(--out); color: #fff; transform: scale(1.1); }
 .fits__add { color: var(--ink-3); padding: 0 14px; }
 .fits__add:hover { color: var(--ink); }
 

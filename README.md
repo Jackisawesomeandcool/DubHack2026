@@ -6,7 +6,7 @@ on an option to add it to the board (up to 10 pieces), or select a piece on the 
 click an option to swap it in — the new piece takes the old one's spot. Each prompt is kept as a
 small speech bubble beside the board; click one to bring its options back. Drag pieces anywhere to
 rearrange them. Hover a piece for its price, click it for name / brand / stock, a direct link to the
-listing, and remove. Keep up to five fits and share the haul — positions included — as a read-only
+listing, and remove. Keep up to five hauls (delete one with the × on its tab) and share — positions included — as a read-only
 link; guests get the same popup and listing link.
 
 **Swapping, Pinterest-style.** Click a piece: alternatives in the same category load into the tray,
@@ -63,11 +63,21 @@ and sends it to the UI. Every visual comes directly from the listing site.
 
 **Speed: local catalog + nike.com search API.** On startup the backend warms a local catalog of
 popular Nike items (dunks, AF1, tech fleece, …) in the background, each stored with its finished
-cutout in `backend/data/catalog.json`. Random fits are assembled from the catalog in milliseconds,
+cutout in `backend/data/catalog.sqlite` (SQLite, standard library). Random fits are assembled from the catalog in milliseconds,
 swap alternatives and most searches are answered from it instantly, and live searches go to nike.com's
 own product-search API first (sub-second; it returns a product-only photo and an on-model photo, so no
 vision call is needed) with Grok's web search as the fallback. Everything that comes back with a
-cutout joins the catalog, so the app gets faster the more it's used.
+cutout joins the catalog, so the app gets faster the more it's used. Identical searches within an hour
+are served from a result cache. A background thread re-checks stock on the oldest-checked listings
+(rate-limited, via the page's JSON-LD) and re-checks any product you place on the board; out-of-stock
+products are never served.
+
+Seed the catalog in advance (optional, a few minutes):
+
+```bash
+cd backend && python3 ingest.py            # product-only cutouts
+cd backend && python3 ingest.py --models   # also on-model cutouts
+```
 
 **Cutout pipeline.** For each product the backend gathers candidate photos (the page's `og:image`,
 JSON-LD images, and the one Grok saw), asks Grok (vision) which one shows only the product with no

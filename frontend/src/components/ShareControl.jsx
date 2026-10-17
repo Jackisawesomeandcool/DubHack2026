@@ -66,10 +66,10 @@ export default function ShareControl({ fits, current, disabled }) {
       {open && (
         <div className="share__menu" role="menu">
           <button type="button" role="menuitem" className="share__opt" disabled={!currentHasItems} onClick={() => share([fits[current]])}>
-            <span>this fit</span><small>{fitLabel(current)}</small>
+            <span>this haul</span><small>{fitLabel(current)}</small>
           </button>
           <button type="button" role="menuitem" className="share__opt" onClick={() => share(fits)}>
-            <span>all fits</span><small>{filled.length} fits</small>
+            <span>all hauls</span><small>{filled.length} hauls</small>
           </button>
         </div>
       )}

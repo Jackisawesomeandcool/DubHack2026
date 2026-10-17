@@ -19,7 +19,7 @@ export function formatPrice(value) {
 }
 
 export function fitLabel(index) {
-  return `FIT ${String(index + 1).padStart(2, '0')}`;
+  return `HAUL ${String(index + 1).padStart(2, '0')}`;
 }
 
 export function itemKey(item) {

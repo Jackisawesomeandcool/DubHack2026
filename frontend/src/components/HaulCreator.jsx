@@ -7,7 +7,7 @@ import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import ModelsToggle from './ModelsToggle.jsx';
-import { health, randomFit, suggest } from '../lib/api.js';
+import { health, randomFit, seen, suggest } from '../lib/api.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
 
 const MAX_HISTORY = 7;
@@ -51,8 +51,9 @@ export default function HaulCreator() {
     try {
       const { items } = await randomFit(modelsRef.current);
       update(index, () => ({ items: withPositions(items) }));
+      seen(items);
     } catch (err) {
-      setFitError(`couldn’t load a fit — ${err.message || 'try again'}`);
+      setFitError(`couldn’t load a haul — ${err.message || 'try again'}`);
     } finally {
       setLoadingFit(false);
     }
@@ -164,9 +165,17 @@ export default function HaulCreator() {
     loading: swap.loading,
     onPrev: () => previewAt(swap.index <= -1 ? swap.alts.length - 1 : swap.index - 1),
     onNext: () => previewAt(swap.index >= swap.alts.length - 1 ? -1 : swap.index + 1),
-    onKeep: () => setSwap((s) => (s ? { ...s, original: selectedItem, index: -1 } : s)),
+    onKeep: () => { if (selectedItem) seen([selectedItem]); setSwap((s) => (s ? { ...s, original: selectedItem, index: -1 } : s)); },
     onUndo: () => previewAt(-1),
   };
+
+  function deleteFit(index) {
+    if (fits.length <= 1) return;
+    revertSwap(swapRef.current);
+    setSwap(null);
+    setFits((prev) => prev.filter((_, i) => i !== index));
+    setCurrent((cur) => (cur > index ? cur - 1 : Math.min(cur, fits.length - 2)));
+  }
 
   function addFit() {
     if (fits.length >= MAX_FITS) return;
@@ -185,7 +194,7 @@ export default function HaulCreator() {
   return (
     <main className="app">
       <header className="bar">
-        <FitSelector fits={fits} current={current} onSelect={(i) => { revertSwap(swapRef.current); setSwap(null); setCurrent(i); }} onAdd={loadingFit ? undefined : addFit} />
+        <FitSelector fits={fits} current={current} onSelect={(i) => { revertSwap(swapRef.current); setSwap(null); setCurrent(i); }} onAdd={loadingFit ? undefined : addFit} onDelete={loadingFit ? undefined : deleteFit} />
         <div className="bar__right">
           <HaulTotal total={total} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
@@ -221,7 +230,7 @@ export default function HaulCreator() {
             full={fit.items.length >= MAX_ITEMS}
             swapMode={Boolean(swap)}
             onSwap={previewOption}
-            onAdd={(item) => update(current, (f) => addItem(f, item))}
+            onAdd={(item) => { seen([item]); update(current, (f) => addItem(f, item)); }}
             onDismiss={() => { if (active) setActiveId(null); else { revertSwap(swapRef.current); setSwap(null); } }}
           />
         )}

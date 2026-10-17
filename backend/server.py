@@ -23,6 +23,7 @@ import cutouts
 import finder
 import fits
 import grok
+import stock
 import store
 from products import CATEGORIES
 
@@ -118,6 +119,13 @@ class Handler(BaseHTTPRequestHandler):
                 return None
             return self._stream_suggest(prompt, category, exclude, models)
 
+        if self.path == "/api/seen":
+            # Light stock re-check for products shown / placed on the board.
+            body = self._read_json() or {}
+            for url in [u for u in body.get("urls", []) if isinstance(u, str)][:20]:
+                stock.recheck(url)
+            return self._json(HTTPStatus.OK, {"ok": True})
+
         if self.path == "/api/share":
             body = self._read_json()
             fits = store.sanitize_fits((body or {}).get("fits"))
@@ -191,6 +199,7 @@ def main() -> None:
     print(f"catalog: {catalog.count()} items · cutouts: {'ready' if cutouts.available() else 'installing…'}")
     cutouts.warm()
     catalog.warm(lambda term, models: finder.find(term, models, local_first=False))
+    stock.start()
     fits.ensure_pool()
     ThreadingHTTPServer((config.HOST, config.PORT), Handler).serve_forever()
 

@@ -95,6 +95,29 @@ def _jsonld_images(blocks: list[str]) -> list[str]:
     return [f for f in found if f]
 
 
+def _fetch_html(url: str) -> tuple[str, str]:
+    with _get(url, PAGE_TIMEOUT) as resp:
+        raw = resp.read(MAX_PAGE_BYTES)
+        if resp.headers.get("Content-Encoding") == "gzip":
+            raw = gzip.decompress(raw)
+        return raw.decode("utf-8", "replace"), resp.geturl()
+
+
+def jsonld_blocks(url: str) -> list[str]:
+    """Raw JSON-LD script bodies from a page ([] on any failure)."""
+    try:
+        html, _ = _fetch_html(url)
+    except Exception as err:  # noqa: BLE001
+        print(f"[images] page fetch failed {url}: {err}", file=sys.stderr)
+        return []
+    parser = _MetaParser()
+    try:
+        parser.feed(html)
+    except Exception:  # noqa: BLE001
+        pass
+    return parser.jsonld
+
+
 def candidates_from_page(url: str) -> list[str]:
     """Image URLs the product page itself declares, best first."""
     try:

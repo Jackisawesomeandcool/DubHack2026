@@ -1,26 +1,30 @@
-"""Local catalog of popular, fully processed listings.
+"""Local product catalog (SQLite, standard library only).
 
-Every product that passes the cutout pipeline — from background warm-up
-searches of popular items, random-fit builds, or user searches — is stored
-here with its finished cutout. Random fits, swap alternatives and most
-searches are then answered instantly from disk; live search only fills gaps.
+Products are keyed by listing URL and carry a finished cutout per mode
+(product-only / on-model), tags for matching, stock state and freshness
+timestamps. Searches, swap alternatives and random fits are answered from
+here first; live search only fills what's missing, and everything it finds
+is written back. Out-of-stock products are never served.
 """
 
 import json
 import random
 import re
+import sqlite3
 import sys
 import threading
 import time
 
 import config
 
-_path = config.DATA_DIR / "catalog.json"
-_lock = threading.Lock()
-_items: list[dict] | None = None
+DB_PATH = config.DATA_DIR / "catalog.sqlite"
+RESULT_TTL = 60 * 60          # cached search results stay valid this long
+MIN_FOR_RANDOM = 12           # items needed before random fits come from the catalog
+
+_lock = threading.RLock()
+_conn: sqlite3.Connection | None = None
 _warming = False
 
-# Popular searches warmed in the background (product-only mode first).
 POPULAR = [
     "dunk low", "air force 1", "air jordan 1", "air max", "pegasus", "vomero", "p-6000",
     "tech fleece hoodie", "tech fleece joggers", "windrunner jacket", "club fleece crew",
@@ -28,118 +32,195 @@ POPULAR = [
     "puffer jacket", "acg jacket", "acg pants", "beanie", "futura cap", "bucket hat",
     "backpack", "crossbody bag", "crew socks", "windbreaker", "sweatpants", "track jacket",
 ]
-MIN_FOR_RANDOM = 12  # items needed before random fits come from the catalog
 
 _WORD = re.compile(r"[a-z0-9]+")
 _SYN = {
-    "jacket": "outerwear", "jackets": "outerwear", "coat": "outerwear", "coats": "outerwear", "windbreaker": "outerwear", "puffer": "outerwear",
-    "hoodie": "top", "hoodies": "top", "tee": "top", "tees": "top", "shirt": "top", "shirts": "top", "sweatshirt": "top", "crewneck": "top", "top": "top", "tops": "top",
-    "pants": "bottom", "joggers": "bottom", "shorts": "bottom", "cargos": "bottom", "sweatpants": "bottom", "bottoms": "bottom", "trousers": "bottom",
-    "shoes": "shoes", "shoe": "shoes", "sneakers": "shoes", "sneaker": "shoes", "kicks": "shoes", "boots": "shoes", "runners": "shoes",
+    "jacket": "outerwear", "jackets": "outerwear", "coat": "outerwear", "coats": "outerwear", "windbreaker": "outerwear", "puffer": "outerwear", "outerwear": "outerwear",
+    "hoodie": "top", "hoodies": "top", "tee": "top", "tees": "top", "shirt": "top", "shirts": "top", "sweatshirt": "top", "crewneck": "top", "top": "top", "tops": "top", "sweater": "top",
+    "pants": "bottom", "joggers": "bottom", "shorts": "bottom", "cargos": "bottom", "sweatpants": "bottom", "bottoms": "bottom", "trousers": "bottom", "jeans": "bottom",
+    "shoes": "shoes", "shoe": "shoes", "sneakers": "shoes", "sneaker": "shoes", "kicks": "shoes", "boots": "shoes", "runners": "shoes", "dunks": "shoes",
     "hat": "headwear", "hats": "headwear", "cap": "headwear", "caps": "headwear", "beanie": "headwear",
     "bag": "bag", "bags": "bag", "backpack": "bag", "tote": "bag",
     "socks": "accessory", "belt": "accessory", "accessory": "accessory", "accessories": "accessory",
 }
+_STOP = {"a", "an", "the", "and", "or", "with", "for", "in", "on", "of", "to", "fit", "look", "outfit", "style", "nike", "mens", "womens", "men", "women"}
 
 
-def _load() -> list[dict]:
-    global _items
-    if _items is None:
-        try:
-            _items = json.loads(_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            _items = []
-    return _items
+# ---------------------------------------------------------------- db
+def _db() -> sqlite3.Connection:
+    global _conn
+    if _conn is None:
+        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        _conn.row_factory = sqlite3.Row
+        _conn.executescript("""
+            PRAGMA journal_mode=WAL;
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY,
+                url TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL, brand TEXT NOT NULL, price REAL NOT NULL,
+                category TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '',
+                cutout_p TEXT, cutout_m TEXT,
+                stock TEXT NOT NULL DEFAULT 'in_stock',
+                source TEXT, last_checked REAL, added_at REAL
+            );
+            CREATE INDEX IF NOT EXISTS idx_products_cat ON products(category);
+            CREATE TABLE IF NOT EXISTS results (
+                key TEXT PRIMARY KEY, urls TEXT NOT NULL, created REAL NOT NULL
+            );
+        """)
+    return _conn
 
 
-def _save() -> None:
-    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = _path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(_items), encoding="utf-8")
-    tmp.replace(_path)
+def _row_to_item(r: sqlite3.Row, models: bool) -> dict:
+    return {
+        "name": r["name"], "brand": r["brand"], "price": r["price"], "url": r["url"],
+        "image": (r["cutout_m"] if models else r["cutout_p"]) or "",
+        "stock": r["stock"], "category": r["category"],
+    }
 
 
-def _key(item: dict) -> str:
-    return f"{item.get('brand','').lower()}|{item.get('name','').lower()}"
+def _url_key(item: dict) -> str:
+    return item.get("url") or f"name:{item.get('brand','').lower()}|{item.get('name','').lower()}"
 
 
-def add(items: list[dict], models: bool, query: str = "") -> None:
-    """Store finished products (with cutouts) for the given mode."""
+# ---------------------------------------------------------------- write
+def upsert(items: list[dict], models: bool, query: str = "", source: str = "") -> None:
+    """Store finished products (with a cutout for this mode)."""
+    now = time.time()
     with _lock:
-        cat = _load()
-        by_key = {(_key(i), bool(i.get("models"))): i for i in cat}
-        changed = False
+        db = _db()
         for it in items:
             if not it.get("image"):
                 continue
-            k = (_key(it), models)
-            entry = by_key.get(k)
-            tags = set((entry or {}).get("tags", []))
-            tags.update(_WORD.findall(query.lower()))
-            rec = {k2: v for k2, v in it.items() if k2 not in ("x", "y", "uid", "pending")}
-            rec.update({"models": models, "tags": sorted(tags), "seen": time.time()})
-            if entry:
-                entry.update(rec)
+            url = _url_key(it)
+            words = {w for w in _WORD.findall(f"{query} {it.get('name','')}".lower()) if w not in _STOP and len(w) > 1}
+            row = db.execute("SELECT tags, cutout_p, cutout_m FROM products WHERE url=?", (url,)).fetchone()
+            col = "cutout_m" if models else "cutout_p"
+            if row:
+                tags = set((row["tags"] or "").split()) | words
+                db.execute(
+                    f"UPDATE products SET name=?, brand=?, price=?, category=?, tags=?, {col}=?, stock=?, source=COALESCE(?, source), last_checked=? WHERE url=?",
+                    (it["name"], it["brand"], float(it.get("price") or 0), it["category"], " ".join(sorted(tags)),
+                     it["image"], it.get("stock", "in_stock"), source or None, now, url))
             else:
-                cat.append(rec)
-                by_key[k] = rec
-            changed = True
-        if changed:
-            _save()
+                db.execute(
+                    f"INSERT INTO products (url, name, brand, price, category, tags, {col}, stock, source, last_checked, added_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (url, it["name"], it["brand"], float(it.get("price") or 0), it["category"], " ".join(sorted(words)),
+                     it["image"], it.get("stock", "in_stock"), source, now, now))
+        db.commit()
 
 
-def _score(item: dict, words: list[str], category: str | None) -> float:
-    if category and item.get("category") != category:
+def set_stock(url: str, stock: str) -> None:
+    with _lock:
+        _db().execute("UPDATE products SET stock=?, last_checked=? WHERE url=?", (stock, time.time(), url))
+        _db().commit()
+
+
+def cache_results(prompt: str, category: str | None, models: bool, items: list[dict]) -> None:
+    key = _result_key(prompt, category, models)
+    with _lock:
+        _db().execute("INSERT OR REPLACE INTO results (key, urls, created) VALUES (?,?,?)",
+                      (key, json.dumps([_url_key(i) for i in items if i.get("image")]), time.time()))
+        _db().commit()
+
+
+# ---------------------------------------------------------------- read
+def _result_key(prompt: str, category: str | None, models: bool) -> str:
+    return f"{' '.join(_WORD.findall(prompt.lower()))}|{category or ''}|{'m' if models else 'p'}"
+
+
+def cached_results(prompt: str, category: str | None, models: bool, exclude: list[str]) -> list[dict] | None:
+    """Products from an earlier identical search, if still fresh and in stock."""
+    with _lock:
+        row = _db().execute("SELECT urls, created FROM results WHERE key=?", (_result_key(prompt, category, models),)).fetchone()
+        if not row or time.time() - row["created"] > RESULT_TTL:
+            return None
+        col = "cutout_m" if models else "cutout_p"
+        ex = {n.lower() for n in exclude}
+        out = []
+        for url in json.loads(row["urls"]):
+            r = _db().execute(f"SELECT * FROM products WHERE url=? AND stock='in_stock' AND {col} IS NOT NULL", (url,)).fetchone()
+            if r and r["name"].lower() not in ex:
+                out.append(_row_to_item(r, models))
+        return out
+
+
+def _score(r: sqlite3.Row, words: list[str], cat_hint: str | None) -> float:
+    if cat_hint and r["category"] != cat_hint:
         return 0.0
-    hay = f"{item.get('name','')} {' '.join(item.get('tags', []))}".lower()
+    name = r["name"].lower()
+    tags = set((r["tags"] or "").split())
     score = 0.0
     for w in words:
-        if w in _SYN and _SYN[w] == item.get("category"):
+        if w in _SYN and _SYN[w] == r["category"]:
             score += 1.0
-        elif w in hay:
-            score += 2.0 if w in item.get("name", "").lower() else 1.0
+        elif w in name:
+            score += 2.0
+        elif w in tags:
+            score += 1.0
     return score
 
 
 def search(prompt: str, category: str | None, models: bool, exclude: list[str], limit: int = 6) -> list[dict]:
-    words = [w for w in _WORD.findall(prompt.lower()) if len(w) > 1]
+    words = [w for w in _WORD.findall(prompt.lower()) if w not in _STOP and len(w) > 1]
     cat_hint = category or next((_SYN[w] for w in words if w in _SYN), None)
+    col = "cutout_m" if models else "cutout_p"
     ex = {n.lower() for n in exclude}
     with _lock:
-        pool = [i for i in _load() if bool(i.get("models")) == models and i.get("name", "").lower() not in ex]
-    scored = [(_score(i, words, cat_hint), i) for i in pool]
-    scored = [(s, i) for s, i in scored if s > 0]
-    scored.sort(key=lambda t: (-t[0], -t[1].get("seen", 0)))
-    return [dict(i) for _, i in scored[:limit]]
+        rows = _db().execute(
+            f"SELECT * FROM products WHERE stock='in_stock' AND {col} IS NOT NULL" + (" AND category=?" if cat_hint else ""),
+            (cat_hint,) if cat_hint else ()).fetchall()
+    scored = [(_score(r, words, cat_hint), r) for r in rows if r["name"].lower() not in ex]
+    scored = [(s, r) for s, r in scored if s > 0]
+    scored.sort(key=lambda t: (-t[0], -(t[1]["last_checked"] or 0)))
+    return [_row_to_item(r, models) for _, r in scored[:limit]]
 
 
 def random_fit(models: bool) -> dict | None:
-    """One piece per category from the catalog, or None if too thin."""
+    """One in-stock piece per category from the catalog, or None if too thin."""
+    col = "cutout_m" if models else "cutout_p"
     with _lock:
-        pool = [i for i in _load() if bool(i.get("models")) == models and i.get("image")]
-    if len(pool) < MIN_FOR_RANDOM:
+        rows = _db().execute(f"SELECT * FROM products WHERE stock='in_stock' AND {col} IS NOT NULL").fetchall()
+    if len(rows) < MIN_FOR_RANDOM:
         return None
     by_cat: dict[str, list] = {}
-    for i in pool:
-        by_cat.setdefault(i["category"], []).append(i)
+    for r in rows:
+        by_cat.setdefault(r["category"], []).append(r)
     if not all(c in by_cat for c in ("top", "bottom", "shoes")):
         return None
     cats = ["top", "bottom", "shoes"] + [c for c in ("outerwear", "headwear", "bag", "accessory") if c in by_cat and random.random() < 0.7]
-    items = [dict(random.choice(by_cat[c])) for c in cats]
-    for it in items:
-        it.pop("tags", None); it.pop("seen", None); it.pop("models", None)
-    return {"prompt": "from popular items", "models": models, "items": items}
+    return {"prompt": "from popular items", "models": models,
+            "items": [_row_to_item(random.choice(by_cat[c]), models) for c in cats]}
 
 
 def count(models: bool | None = None) -> int:
     with _lock:
-        cat = _load()
-    return len(cat) if models is None else sum(1 for i in cat if bool(i.get("models")) == models)
+        if models is None:
+            return _db().execute("SELECT COUNT(*) FROM products").fetchone()[0]
+        col = "cutout_m" if models else "cutout_p"
+        return _db().execute(f"SELECT COUNT(*) FROM products WHERE {col} IS NOT NULL").fetchone()[0]
 
 
+def stale(limit: int = 5, max_age: float = 6 * 3600) -> list[str]:
+    """Listing URLs whose stock hasn't been checked recently (oldest first)."""
+    with _lock:
+        rows = _db().execute(
+            "SELECT url FROM products WHERE url LIKE 'http%' AND (last_checked IS NULL OR last_checked < ?) ORDER BY last_checked LIMIT ?",
+            (time.time() - max_age, limit)).fetchall()
+    return [r["url"] for r in rows]
+
+
+def has_tags(words: list[str]) -> bool:
+    with _lock:
+        rows = _db().execute("SELECT tags FROM products").fetchall()
+    seen = {t for r in rows for t in (r["tags"] or "").split()}
+    return all(w in seen for w in words)
+
+
+# ---------------------------------------------------------------- warm-up
 def warm(find) -> None:
-    """Background: run the popular searches once (product-only), storing results.
-    `find(term, models)` must return finished items with cutouts."""
+    """Background: run the popular searches once (product-only mode)."""
     global _warming
     with _lock:
         if _warming:
@@ -149,16 +230,15 @@ def warm(find) -> None:
     def run():
         global _warming
         try:
-            done = {t for i in _load() for t in i.get("tags", [])}
             for term in POPULAR:
-                if all(w in done for w in _WORD.findall(term)):
+                if has_tags([w for w in _WORD.findall(term) if w not in _STOP]):
                     continue
                 try:
                     items = find(term, False)
-                    add(items, False, term)
                     print(f"[catalog] warmed '{term}' → {len(items)} items (catalog {count()})", file=sys.stderr)
                 except Exception as err:  # noqa: BLE001
                     print(f"[catalog] warm '{term}' failed: {err}", file=sys.stderr)
+                time.sleep(1.0)  # be gentle with the sources
         finally:
             with _lock:
                 _warming = False
