@@ -7,16 +7,15 @@ import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import { randomFit, suggest } from '../lib/api.js';
-import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, swapItem, withPositions } from '../lib/haul.js';
+import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
 
-const MAX_HISTORY = 6;
+const MAX_HISTORY = 7;
 
 export default function HaulCreator() {
   const [fits, setFits] = useState([emptyFit()]);
   const [current, setCurrent] = useState(0);
   const [loadingFit, setLoadingFit] = useState(false);
   const [fitError, setFitError] = useState('');
-  const [selected, setSelected] = useState(null); // piece selected on the board
 
   // Search history: each entry keeps its prompt and the options it returned.
   const [history, setHistory] = useState([]);
@@ -24,10 +23,17 @@ export default function HaulCreator() {
   const nextId = useRef(1);
   const booted = useRef(false);
 
+  // Swap session for the selected piece: alternatives are previewed on the
+  // board and only kept when the user says so.
+  const [swap, setSwap] = useState(null); // { uid, original, alts, index, loading, error }
+  const swapRef = useRef(null);
+  swapRef.current = swap;
+
   const fit = fits[current];
   const total = useMemo(() => fitTotal(fit), [fit]);
   const hasAnyItems = fits.some((f) => f.items.length);
   const active = history.find((h) => h.id === activeId) || null;
+  const selectedItem = swap ? fit.items.find((i) => i.uid === swap.uid) || null : null;
 
   const update = (index, fn) => setFits((prev) => prev.map((f, i) => (i === index ? fn(f) : f)));
   const patchHistory = (id, patch) => setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, ...patch } : h)));
@@ -64,18 +70,97 @@ export default function HaulCreator() {
     }
   }
 
+  // ---- swap session ------------------------------------------------------
+  function revertSwap(s) {
+    if (s && s.index !== -1) {
+      update(current, (f) => {
+        const cur = f.items.find((i) => i.uid === s.uid);
+        return cur ? swapItem(f, cur, s.original) : f;
+      });
+    }
+  }
+
+  async function beginSwap(item) {
+    revertSwap(swapRef.current);
+    const session = { uid: item.uid, original: item, alts: [], index: -1, loading: true, error: '' };
+    setSwap(session);
+    setActiveId(null);
+    try {
+      const prompt = `${item.category === 'bottom' ? 'pants' : item.category} similar in style to ${item.name}`;
+      const { items } = await suggest(prompt, item.category, fit.items.map((i) => i.name));
+      const alts = items.filter((a) => !sameProduct(a, item));
+      setSwap((s) => (s && s.uid === item.uid ? { ...s, alts, loading: false } : s));
+    } catch {
+      setSwap((s) => (s && s.uid === item.uid ? { ...s, loading: false, error: 'couldn’t find alternatives' } : s));
+    }
+  }
+
+  function onSelectionChange(item) {
+    const s = swapRef.current;
+    if (item) {
+      if (!s || s.uid !== item.uid) beginSwap(item);
+      return;
+    }
+    // Deselected without keeping: changes they didn't confirm are dropped.
+    if (s) { revertSwap(s); setSwap(null); }
+  }
+
+  function previewAt(index) {
+    setSwap((s) => {
+      if (!s) return s;
+      const target = index === -1 ? s.original : s.alts[index];
+      if (!target) return s;
+      update(current, (f) => {
+        const cur = f.items.find((i) => i.uid === s.uid);
+        return cur ? swapItem(f, cur, target) : f;
+      });
+      return { ...s, index };
+    });
+  }
+
+  function previewOption(item) {
+    setSwap((s) => {
+      if (!s) return s;
+      let alts = s.alts;
+      let index = alts.findIndex((a) => sameProduct(a, item));
+      if (index === -1) { alts = [item, ...alts]; index = 0; }
+      update(current, (f) => {
+        const cur = f.items.find((i) => i.uid === s.uid);
+        return cur ? swapItem(f, cur, item) : f;
+      });
+      return { ...s, alts, index };
+    });
+  }
+
+  const swapUi = swap && {
+    dirty: swap.index !== -1,
+    canPrev: swap.alts.length > 0,
+    canNext: swap.alts.length > 0,
+    loading: swap.loading,
+    onPrev: () => previewAt(swap.index <= -1 ? swap.alts.length - 1 : swap.index - 1),
+    onNext: () => previewAt(swap.index >= swap.alts.length - 1 ? -1 : swap.index + 1),
+    onKeep: () => setSwap((s) => (s ? { ...s, original: selectedItem, index: -1 } : s)),
+    onUndo: () => previewAt(-1),
+  };
+
   function addFit() {
     if (fits.length >= MAX_FITS) return;
     const index = fits.length;
     setFits((prev) => [...prev, emptyFit()]);
     setCurrent(index);
+    setSwap(null);
     loadRandom(index);
   }
+
+  const trayOptions = active ? active.options : swap ? swap.alts : [];
+  const trayLoading = active ? active.loading : Boolean(swap?.loading);
+  const trayError = active ? active.error : swap?.error || '';
+  const showTray = Boolean(active) || Boolean(swap);
 
   return (
     <main className="app">
       <header className="bar">
-        <FitSelector fits={fits} current={current} onSelect={setCurrent} onAdd={loadingFit ? undefined : addFit} />
+        <FitSelector fits={fits} current={current} onSelect={(i) => { revertSwap(swapRef.current); setSwap(null); setCurrent(i); }} onAdd={loadingFit ? undefined : addFit} />
         <div className="bar__right">
           <HaulTotal total={total} />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
@@ -88,25 +173,28 @@ export default function HaulCreator() {
         editable
         loading={loadingFit}
         hint={fitError}
+        swapUi={swapUi}
         onMove={(item, x, y) => update(current, (f) => moveItem(f, item, x, y))}
-        onRemove={(item) => update(current, (f) => removeItem(f, item))}
-        onSelectionChange={setSelected}
+        onRemove={(item) => { if (swap?.uid === item.uid) setSwap(null); update(current, (f) => removeItem(f, item)); }}
+        onSelectionChange={onSelectionChange}
       />
 
       <SearchHistory entries={history} activeId={activeId} onSelect={setActiveId} />
 
       <footer className="dock">
-        {active && (
+        {showTray && (
           <OptionsTray
-            options={active.options}
-            loading={active.loading}
-            error={active.error}
+            title={swap && !active ? `swap ${swap.original.category === 'bottom' ? 'bottoms' : swap.original.category}` : ''}
+            options={trayOptions}
+            loading={trayLoading}
+            error={trayError}
             isOnBoard={(item) => onBoard(fit, item)}
+            previewing={swap ? selectedItem : null}
             full={fit.items.length >= MAX_ITEMS}
-            swapMode={Boolean(selected)}
-            onSwap={(item) => { if (selected) update(current, (f) => swapItem(f, selected, item)); }}
+            swapMode={Boolean(swap)}
+            onSwap={previewOption}
             onAdd={(item) => update(current, (f) => addItem(f, item))}
-            onDismiss={() => setActiveId(null)}
+            onDismiss={() => { if (active) setActiveId(null); else { revertSwap(swapRef.current); setSwap(null); } }}
           />
         )}
         <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />

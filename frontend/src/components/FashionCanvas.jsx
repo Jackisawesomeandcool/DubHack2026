@@ -12,6 +12,7 @@ export default function FashionCanvas({
   onMove,
   onRemove,
   onSelectionChange,
+  swapUi = null,
   loading = false,
   hint = '',
 }) {
@@ -49,6 +50,7 @@ export default function FashionCanvas({
             zIndex={10 + i}
             selected={selected?.uid === item.uid}
             draggable={editable}
+            swapUi={selected?.uid === item.uid ? swapUi : null}
             canvasRef={ref}
             onMove={onMove}
             onRemove={(it) => { onRemove?.(it); if (selected?.uid === it.uid) close(); }}

@@ -259,12 +259,20 @@ button:focus-visible, input:focus-visible {
   position: absolute;
   transform: translate(-50%, -50%);
   display: block;
-  cursor: pointer;
   border-radius: 18px;
   animation: enter 420ms var(--ease) both;
   transition: transform var(--mid) var(--ease), filter var(--mid) var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
+.item__hit {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  border-radius: 18px;
+  -webkit-tap-highlight-color: transparent;
+}
+.item.is-draggable .item__hit { cursor: grab; touch-action: none; }
+.item.is-dragging .item__hit { cursor: grabbing; }
 .item__art {
   display: block;
   width: 100%;
@@ -285,8 +293,7 @@ button:focus-visible, input:focus-visible {
   mix-blend-mode: multiply; /* white studio backgrounds dissolve into the canvas */
 }
 
-.item.is-draggable { cursor: grab; touch-action: none; }
-.item.is-dragging { cursor: grabbing; transition: none; }
+.item.is-dragging { transition: none; }
 .item:hover,
 .item.is-selected {
   transform: translate(-50%, -53%) scale(1.04);
@@ -295,6 +302,55 @@ button:focus-visible, input:focus-visible {
 .item.is-dragging { transform: translate(-50%, -50%) scale(1.06); }
 .item.is-dragging .item__price { opacity: 0; }
 .item.is-leaving { transform: translate(-50%, -50%) scale(0.9); opacity: 0.45; filter: grayscale(1); }
+.item.is-selected .item__art { filter: drop-shadow(0 22px 30px rgb(28 27 25 / 0.22)) drop-shadow(0 0 0 rgb(28 27 25 / 0.0)); }
+.item__arrow {
+  position: absolute;
+  top: 50%;
+  width: 34px; height: 34px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+  display: grid; place-items: center;
+  box-shadow: var(--shadow-md);
+  animation: popIn 180ms var(--ease);
+  transition: transform var(--fast) var(--ease), background var(--fast), color var(--fast), opacity var(--fast);
+}
+.item__arrow--prev { left: -17px; }
+.item__arrow--next { right: -17px; }
+.item__arrow:hover:not(:disabled) { background: var(--ink); color: var(--accent-ink); transform: translateY(-50%) scale(1.08); }
+.item__arrow:active:not(:disabled) { transform: translateY(-50%) scale(0.94); }
+.item__arrow:disabled { opacity: 0.35; cursor: default; }
+.item__actions {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+  animation: rise var(--mid) var(--ease);
+}
+.item__hintpill, .item__keep, .item__undo {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  display: inline-flex; align-items: center;
+  box-shadow: var(--shadow-sm);
+}
+.item__hintpill { background: var(--surface); color: var(--ink-3); }
+.item__keep { background: var(--ok); color: #fff; transition: transform var(--fast) var(--ease); }
+.item__undo { background: var(--surface); color: var(--ink-2); transition: transform var(--fast) var(--ease), color var(--fast); }
+.item__keep:hover, .item__undo:hover { transform: translateY(-1px); }
+.item__undo:hover { color: var(--out); }
+.item.is-dirty .item__art { animation: nudge 320ms var(--ease); }
+@keyframes nudge { 0% { transform: scale(0.96); } 60% { transform: scale(1.03); } 100% { transform: none; } }
 .item__art img { transition: opacity var(--mid) var(--ease); animation: fade var(--mid) var(--ease); }
 .item:hover .item__art,
 .item.is-selected .item__art {
@@ -433,6 +489,9 @@ button:focus-visible, input:focus-visible {
 .chip__badge:disabled { cursor: default; opacity: 0.5; }
 .chip__badge.is-on, .chip__badge.is-on:disabled { background: var(--ok); color: #fff; opacity: 1; }
 .chip.is-on { background: #eef7f1; }
+.tray__title { margin: 0 8px 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.chip.is-preview { background: #fff; box-shadow: 0 0 0 2px var(--ink), var(--shadow-md); }
+.chip__badge.is-preview { background: var(--ink); color: var(--accent-ink); font-size: 9px; pointer-events: none; }
 .tray__note { margin: 6px 8px 0; font-size: 11px; color: var(--ink-3); letter-spacing: 0.02em; }
 .chip--skeleton {
   background: linear-gradient(90deg, #f1eee8 25%, #f8f6f2 50%, #f1eee8 75%);

@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import config
+import cutouts
 import fits
 import grok
 import store
@@ -122,7 +123,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(HTTPStatus.OK, shared)
         if self.path.startswith("/api/"):
             return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+        m = re.fullmatch(r"/cutouts/([a-f0-9]{16}\.png)", self.path)
+        if m:
+            return self._serve_file(cutouts.CUTOUT_DIR / m.group(1), "image/png")
         self._serve_static()
+
+    def _serve_file(self, path, ctype):
+        if not path.is_file():
+            return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+        data = path.read_bytes()
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        self._cors()
+        self.end_headers()
+        self.wfile.write(data)
 
     def _serve_static(self):
         dist = config.FRONTEND_DIST
@@ -144,6 +160,8 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     mode = f"Grok (xAI) · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}" if config.XAI_API_KEY else "NO KEY — set XAI_API_KEY in backend/.env"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
+    if not cutouts.available():
+        print("WARNING: rembg not installed — run `pip install -r requirements.txt` for transparent cutouts", file=sys.stderr)
     fits.ensure_pool()
     ThreadingHTTPServer((config.HOST, config.PORT), Handler).serve_forever()
 

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-const GAP = 12;
+const GAP = 30;
 const MARGIN = 12;
 
 function host(url) {
@@ -33,7 +33,7 @@ export default function ProductPopup({ item, anchor, onClose, onRemove }) {
     const onKey = (e) => e.key === 'Escape' && onClose();
     const onDown = (e) => {
       if (ref.current?.contains(e.target) || anchor?.contains(e.target)) return;
-      if (e.target.closest?.('.dock')) return;
+      if (e.target.closest?.('.dock') || e.target.closest?.('.item__arrow') || e.target.closest?.('.item__actions')) return;
       onClose();
     };
     const onResize = () => onClose();

@@ -9,15 +9,21 @@ rearrange them. Hover a piece for its price, click it for name / brand / stock, 
 listing, and remove. Keep up to five fits and share the haul — positions included — as a read-only
 link; guests get the same popup and listing link.
 
-Images are never generated or drawn: every photo is pulled from the product's own listing page and
-verified; a product whose photo can't be verified is dropped.
+**Swapping, Pinterest-style.** Click a piece: alternatives in the same category load into the tray,
+and ‹ › arrows appear on the piece. Each arrow press (or clicking a tray option) *tries* that product
+in place. Press **keep** to commit; **undo** or simply clicking away drops the change.
+
+**Images are real product cutouts.** Every photo comes from the product's own listing page. Grok's
+vision picks a photo that shows only the item — on-model shots with a person are rejected — and
+`rembg` removes the background, so each piece is a transparent PNG. Products without a usable
+product-only photo are dropped. Nothing is generated or drawn.
 
 Two pages only: `/` (creator) and `/h/<id>` (shared guest view).
 
 ## Stack
 
 - **Frontend:** React + Vite, plain JavaScript and custom CSS — `frontend/`
-- **Backend:** Python 3.10+ standard library only (no pip installs) — `backend/`
+- **Backend:** Python 3.10+ — `backend/` (standard library, plus `rembg` for background removal)
 - **AI:** Grok (xAI) via the Python backend. The API key is read from `backend/.env` and never reaches the browser.
 
 ## Run locally
@@ -28,7 +34,8 @@ Two terminals.
 
 ```bash
 cd backend
-cp .env.example .env     # add your XAI_API_KEY (optional, see below)
+pip install -r requirements.txt   # rembg + onnxruntime (~180 MB model downloads on first run)
+cp .env.example .env              # add your XAI_API_KEY
 python3 server.py
 ```
 
@@ -50,6 +57,12 @@ store for real, currently listed products matching the request and returns each 
 page URL. The backend then opens that page and pulls the retailer's own
 product photo (`og:image`, Twitter card, or JSON-LD `Product.image`), verifies it serves an image,
 and sends it to the UI. Every visual comes directly from the listing site.
+
+**Cutout pipeline.** For each product the backend gathers candidate photos (the page's `og:image`,
+JSON-LD images, and the one Grok saw), asks Grok (vision) which one shows only the product with no
+person, then runs `rembg` (isnet) to strip the background and trims the result. Cutouts are cached
+in `backend/data/cutouts/` and served at `/cutouts/<id>.png`; each source photo is processed once.
+Without `rembg` installed the server warns at startup and falls back to the chosen photo as-is.
 
 **Random fits are pre-built.** On startup the backend builds a small pool of complete random fits in
 the background (stored in `backend/data/fits.json`), so `GET /api/random-fit` returns instantly and

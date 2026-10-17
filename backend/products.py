@@ -45,6 +45,14 @@ def _url(value) -> str:
     return value if value.startswith("http") and len(value) < 2048 else ""
 
 
+def _image_ref(value) -> str:
+    """Either an absolute https URL or a served cutout path."""
+    value = str(value or "").strip()
+    if re.fullmatch(r"/cutouts/[a-f0-9]{16}\.png", value):
+        return value
+    return _url(value)
+
+
 def _pct(value):
     try:
         v = float(value)
@@ -64,7 +72,7 @@ def normalize(raw: dict) -> dict | None:
         "name": name,
         "brand": brand,
         "price": _price(raw.get("price")),
-        "image": _url(raw.get("image")),
+        "image": _image_ref(raw.get("image")),
         "url": _url(raw.get("url")),
         "stock": _stock(raw.get("stock")),
         "category": _category(raw.get("category")),

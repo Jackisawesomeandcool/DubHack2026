@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 
 import config
-import images
+import cutouts
 from products import CATEGORIES, normalize_list
 
 SYSTEM_PROMPT = f"""You find real clothing products. You never chat or explain.
@@ -188,11 +188,11 @@ def suggest(prompt: str, category: str | None = None, exclude: list[str] | None 
     if not items:
         raise GrokError("Grok returned no usable products")
 
-    # Only real photos pulled from the listing itself; anything unverified is dropped.
-    images.resolve_all(items)
+    # Only real product-only photos (no people), cut out as PNGs; others are dropped.
+    cutouts.resolve_all(items)
     t2 = time.time()
     kept = [it for it in items if it["image"]]
-    print(f"[grok] search {t1 - t0:.1f}s · photos {t2 - t1:.1f}s · {len(kept)}/{len(items)} with verified photo", file=sys.stderr)
+    print(f"[grok] search {t1 - t0:.1f}s · photos {t2 - t1:.1f}s · {len(kept)}/{len(items)} product-only cutouts", file=sys.stderr)
     items = kept
     if not items:
         raise GrokError("No options with a verifiable product photo")

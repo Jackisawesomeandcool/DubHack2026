@@ -1,0 +1,4 @@
+# Background removal for product cutouts (downloads a ~180MB model on first run)
+rembg>=2.0.60
+onnxruntime>=1.17
+pillow>=10
