@@ -13,7 +13,6 @@ Pipeline per product:
 rembg is installed automatically on first run if missing.
 """
 
-import base64
 import hashlib
 import io
 import json
@@ -64,8 +63,8 @@ def _download(url: str) -> bytes:
         return resp.read(15_000_000)
 
 
-def _thumb_data_url(raw: bytes) -> str | None:
-    """Small JPEG data URL for the vision check (xAI needn't fetch the CDN)."""
+def _thumb_jpeg(raw: bytes) -> bytes | None:
+    """Small JPEG for the vision check."""
     if not bgremove.ready():
         return None
     try:
@@ -73,7 +72,7 @@ def _thumb_data_url(raw: bytes) -> str | None:
         im.thumbnail((VISION_SIDE, VISION_SIDE))
         buf = io.BytesIO()
         im.save(buf, "JPEG", quality=80)
-        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+        return buf.getvalue()
     except Exception:  # noqa: BLE001
         return None
 
@@ -83,10 +82,11 @@ def pick(candidates: list[bytes | None], allow_models: bool) -> int:
     """Index of the candidate photo that fits the mode, or -1.
     allow_models=False: must show ONLY the product (no person).
     allow_models=True:  prefer the item worn on a model."""
+    import llm
     valid = [(i, raw) for i, raw in enumerate(candidates) if raw]
     if not valid:
         return -1
-    if not config.XAI_API_KEY:
+    if not llm.configured():
         return valid[0][0]
     if allow_models:
         ask = ("These are photos from one clothing listing. Which photo best shows the item worn on a model "
@@ -97,29 +97,18 @@ def pick(candidates: list[bytes | None], allow_models: bool) -> int:
                "background / invisible mannequin) with NO person, model, face, hands or body visible? Prefer the "
                'clearest full view. Reply with JSON only: {"index": <0-based index>} or {"index": -1} if every photo '
                "includes a person.")
-    content = [{"type": "text", "text": ask}]
-    order = []
+    thumbs, order = [], []
     for i, raw in valid:
-        data_url = _thumb_data_url(raw)
-        if data_url:
-            content.append({"type": "image_url", "image_url": {"url": data_url, "detail": "low"}})
-            order.append(i)
-    if not order:
+        t = _thumb_jpeg(raw)
+        if t:
+            thumbs.append(t); order.append(i)
+    if not thumbs:
         return valid[0][0]
-    payload = {"model": config.XAI_VISION_MODEL, "messages": [{"role": "user", "content": content}],
-               "response_format": {"type": "json_object"}, "temperature": 0}
-    req = urllib.request.Request(
-        f"{config.XAI_BASE_URL}/chat/completions", data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {config.XAI_API_KEY}"}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        idx = int(json.loads(data["choices"][0]["message"]["content"]).get("index", -1))
+        idx = llm.pick_index(ask, thumbs)
         return order[idx] if 0 <= idx < len(order) else -1
     except Exception as err:  # noqa: BLE001
-        detail = getattr(err, "read", None)
-        detail = detail().decode("utf-8", "replace")[:200] if callable(detail) else ""
-        print(f"[cutouts] VISION CHECK FAILED ({err}) {detail} — product skipped", file=sys.stderr)
+        print(f"[cutouts] VISION CHECK FAILED ({err}) — product skipped", file=sys.stderr)
         return -1
 
 

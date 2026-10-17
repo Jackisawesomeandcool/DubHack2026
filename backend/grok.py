@@ -183,3 +183,16 @@ def search_products(prompt: str, category: str | None = None, exclude: list[str]
     if not items:
         raise GrokError("Grok returned no usable products")
     return items
+
+
+def pick_index(question: str, jpeg_blobs: list[bytes]) -> int:
+    """Vision via xAI chat completions (images as base64)."""
+    import base64
+    content = [{"type": "text", "text": question}]
+    for raw in jpeg_blobs:
+        content.append({"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii"), "detail": "low"}})
+    payload = {"model": config.XAI_VISION_MODEL, "messages": [{"role": "user", "content": content}],
+               "response_format": {"type": "json_object"}, "temperature": 0}
+    data = _post("/chat/completions", payload, timeout=60)
+    idx = int(json.loads(data["choices"][0]["message"]["content"]).get("index", -1))
+    return idx if 0 <= idx < len(jpeg_blobs) else -1

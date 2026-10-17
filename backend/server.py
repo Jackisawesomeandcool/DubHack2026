@@ -22,7 +22,7 @@ import config
 import cutouts
 import finder
 import fits
-import grok
+import llm
 import stock
 import store
 from products import CATEGORIES
@@ -32,9 +32,9 @@ MAX_PROMPT = 400
 
 
 def _require_key(handler) -> bool:
-    if config.XAI_API_KEY:
+    if llm.configured():
         return True
-    handler._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "XAI_API_KEY not configured"})
+    handler._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "GEMINI_API_KEY not configured"})
     return False
 
 
@@ -78,8 +78,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             gen = finder.stream(prompt, category, exclude, models)
             first = next(gen)
-        except (grok.GrokError, StopIteration) as err:
-            print(f"[grok] {err}", file=sys.stderr)
+        except (llm.LLMError, StopIteration) as err:
+            print(f"[ai] {err}", file=sys.stderr)
             return self._json(HTTPStatus.BAD_GATEWAY, {"error": str(err) or "no results"})
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
@@ -138,7 +138,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/health":
             return self._json(HTTPStatus.OK, {
-                "key": bool(config.XAI_API_KEY),
+                "key": llm.configured(),
+                "provider": llm.provider(),
                 "cutouts": cutouts.available(),
                 "catalog": catalog.count(),
             })
@@ -148,8 +149,8 @@ class Handler(BaseHTTPRequestHandler):
             models = "models=1" in self.path
             try:
                 return self._json(HTTPStatus.OK, fits.take(models))
-            except grok.GrokError as err:
-                print(f"[grok] {err}", file=sys.stderr)
+            except llm.LLMError as err:
+                print(f"[ai] {err}", file=sys.stderr)
                 return self._json(HTTPStatus.BAD_GATEWAY, {"error": str(err)})
         m = re.fullmatch(r"/api/share/([A-Za-z0-9_-]{4,32})", self.path)
         if m:
@@ -194,7 +195,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    mode = f"Grok (xAI) · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}" if config.XAI_API_KEY else "NO KEY — set XAI_API_KEY in backend/.env"
+    mode = f"AI: {llm.provider()} · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}" if llm.configured() else "NO KEY — set GEMINI_API_KEY in backend/.env"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
     print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER}")
     cutouts.warm()

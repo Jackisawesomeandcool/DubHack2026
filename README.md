@@ -28,7 +28,7 @@ Two pages only: `/` (creator) and `/h/<id>` (shared guest view).
 
 - **Frontend:** React + Vite, plain JavaScript and custom CSS — `frontend/`
 - **Backend:** Python 3.10+ — `backend/` (standard library, plus `rembg` for background removal)
-- **AI:** Grok (xAI) via the Python backend. The API key is read from `backend/.env` and never reaches the browser.
+- **AI:** Google Gemini (default; xAI Grok also supported) via the Python backend. Keys are read from `backend/.env` and never reach the browser.
 
 ## Run locally
 
@@ -38,7 +38,7 @@ Two terminals.
 
 ```bash
 cd backend
-cp .env.example .env              # add your XAI_API_KEY
+cp .env.example .env              # add your GEMINI_API_KEY
 python3 server.py                 # needs only Pillow (installed automatically if missing)
 ```
 
@@ -54,10 +54,10 @@ Open http://localhost:5173.
 
 ### How products are found
 
-With `XAI_API_KEY` set, the backend calls the xAI Responses API with the `web_search` tool
-(filtered to `ALLOWED_DOMAINS`, default `nike.com`) and a strict JSON schema. Grok searches the
-store for real, currently listed products matching the request and returns each one's product
-page URL. The backend then opens that page and pulls the retailer's own
+With `GEMINI_API_KEY` set, live searches that the catalog and nike.com's API can't answer go to
+Gemini (`gemini-2.5-flash`) with Google Search grounding, restricted to `ALLOWED_DOMAINS` (default
+`nike.com`). It returns real, currently listed products with their product page URLs. (Set
+`XAI_API_KEY` instead to use Grok's web search.) The backend then opens that page and pulls the retailer's own
 product photo (`og:image`, Twitter card, or JSON-LD `Product.image`), verifies it serves an image,
 and sends it to the UI. Every visual comes directly from the listing site.
 
@@ -66,7 +66,7 @@ popular Nike items (dunks, AF1, tech fleece, …) in the background, each stored
 cutout in `backend/data/catalog.sqlite` (SQLite, standard library). Random fits are assembled from the catalog in milliseconds,
 swap alternatives and most searches are answered from it instantly, and live searches go to nike.com's
 own product-search API first (sub-second; it returns a product-only photo and an on-model photo, so no
-vision call is needed) with Grok's web search as the fallback. Everything that comes back with a
+vision call is needed) with Gemini (Google Search grounding) as the fallback. Everything that comes back with a
 cutout joins the catalog, so the app gets faster the more it's used. Identical searches within an hour
 are served from a result cache. A background thread re-checks stock on the oldest-checked listings
 (rate-limited, via the page's JSON-LD) and re-checks any product you place on the board; out-of-stock
@@ -80,8 +80,8 @@ cd backend && python3 ingest.py --models   # also on-model cutouts
 ```
 
 **Cutout pipeline.** For each product the backend picks the right photo (nike.com's API hands over a
-product-only and an on-model photo directly; otherwise Grok's vision chooses among the listing's
-photos, sent as base64) and removes the background in the cheapest tier that works:
+product-only and an on-model photo directly; otherwise Gemini's vision chooses among the listing's
+photos, sent inline) and removes the background in the cheapest tier that works:
 
 1. **flat-key** — product photos on a flat light backdrop (Nike's product shots, most flat lays):
    flood-filled from the edges and keyed transparent. ~80 ms, free, Pillow only. This covers the
@@ -98,7 +98,7 @@ the background (stored in `backend/data/fits.json`), so `GET /api/random-fit` re
 the pool refills after each one is used. Only the very first load on a fresh install waits for a live
 search (~10–40 s). Finder searches stream: the products appear in the tray as soon as Grok finds them (as shimmering placeholders), and each one fills in the moment its cutout is ready.
 
-An xAI key is required; there is no offline mode.
+A Gemini (or xAI) key is required; there is no offline mode.
 
 ## Production-style single process
 

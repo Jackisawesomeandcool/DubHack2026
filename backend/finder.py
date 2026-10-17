@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import catalog
 import cutouts
-import grok
+import llm
 import nike
 from products import normalize_list
 
@@ -40,9 +40,9 @@ def _live(prompt: str, category: str | None, exclude: list[str], count: int) -> 
         if items:
             print(f"[finder] nike.com search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
             return items, "nike"
-    items = grok.search_products(prompt, category, exclude, count)
-    print(f"[finder] grok search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
-    return items, "grok"
+    items = llm.search_products(prompt, category, exclude, count)
+    print(f"[finder] {llm.provider()} search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
+    return items, llm.provider()
 
 
 def stream(prompt: str, category: str | None = None, exclude: list[str] | None = None,
@@ -75,7 +75,7 @@ def stream(prompt: str, category: str | None = None, exclude: list[str] | None =
 
     try:
         live, source = _live(prompt, category, exclude + [h["name"] for h in have], want)
-    except grok.GrokError as err:
+    except llm.LLMError as err:
         if have:
             yield {"done": True}
             return

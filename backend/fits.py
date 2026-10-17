@@ -15,7 +15,7 @@ import time
 import catalog
 import config
 import finder
-import grok
+import llm
 
 POOL_SIZE = 3  # per mode (product-only / with models)
 _lock = threading.Lock()
@@ -57,20 +57,20 @@ def _write(pool: list) -> None:
 def build_one(models: bool = False) -> dict:
     """Build a random fit; one retry with a different style if the first
     attempt yields too few usable pieces."""
-    last: grok.GrokError | None = None
+    last: llm.LLMError | None = None
     for prompt in random.sample(STYLES, 2):
         try:
             return _build(prompt, models)
-        except grok.GrokError as err:
+        except llm.LLMError as err:
             print(f"[fits] build '{prompt}' failed: {err}", file=sys.stderr)
             last = err
-    raise last or grok.GrokError("Could not build a fit")
+    raise last or llm.LLMError("Could not build a fit")
 
 
 def _build(prompt: str, models: bool) -> dict:
     items = finder.find(prompt, models, count=7, local_first=False)
     if not items:
-        raise grok.GrokError("No pieces with a usable photo")
+        raise llm.LLMError("No pieces with a usable photo")
     # One piece per category: keep the first of each.
     seen, picked = set(), []
     for it in items:
@@ -79,7 +79,7 @@ def _build(prompt: str, models: bool) -> dict:
         seen.add(it["category"])
         picked.append(it)
     if len(picked) < 3:
-        raise grok.GrokError("Not enough distinct pieces for a fit")
+        raise llm.LLMError("Not enough distinct pieces for a fit")
     return {"prompt": prompt, "models": models, "items": picked}
 
 
@@ -97,7 +97,7 @@ def _refill() -> None:
                 return
             try:
                 fit = build_one(short[0])
-            except grok.GrokError as err:
+            except llm.LLMError as err:
                 print(f"[fits] background build failed: {err}", file=sys.stderr)
                 return
             with _lock:
@@ -113,7 +113,7 @@ def _refill() -> None:
 def ensure_pool() -> None:
     """Kick off background building if the pool is short."""
     global _refilling
-    if not config.XAI_API_KEY:
+    if not llm.configured():
         return
     with _lock:
         if _refilling or not _short_modes(_read()):
