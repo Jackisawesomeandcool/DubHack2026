@@ -171,7 +171,7 @@ def _chat_completions(user: str) -> list:
         raise GrokError("Unexpected xAI response shape") from err
 
 
-def suggest_stream(prompt: str, category: str | None = None, exclude: list[str] | None = None, count: int | None = None):
+def suggest_stream(prompt: str, category: str | None = None, exclude: list[str] | None = None, count: int | None = None, allow_models: bool = False):
     """Generator of events:
         {"items": [...]}               -- products found (no images yet)
         {"index": i, "image": "..."}   -- cutout ready for item i
@@ -201,7 +201,7 @@ def suggest_stream(prompt: str, category: str | None = None, exclude: list[str] 
 
     kept = 0
     with ThreadPoolExecutor(max_workers=min(6, len(items))) as pool:
-        futures = {pool.submit(cutouts.resolve, it): i for i, it in enumerate(items)}
+        futures = {pool.submit(cutouts.resolve, it, allow_models): i for i, it in enumerate(items)}
         for fut in as_completed(futures):
             i = futures[fut]
             try:
@@ -218,10 +218,10 @@ def suggest_stream(prompt: str, category: str | None = None, exclude: list[str] 
     yield {"done": True}
 
 
-def suggest(prompt: str, category: str | None = None, exclude: list[str] | None = None, count: int | None = None) -> list[dict]:
+def suggest(prompt: str, category: str | None = None, exclude: list[str] | None = None, count: int | None = None, allow_models: bool = False) -> list[dict]:
     """Non-streaming convenience: the finished list of products with cutouts."""
     items: list[dict] = []
-    for ev in suggest_stream(prompt, category, exclude, count):
+    for ev in suggest_stream(prompt, category, exclude, count, allow_models):
         if "items" in ev:
             items = ev["items"]
         elif "image" in ev:

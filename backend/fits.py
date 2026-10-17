@@ -15,7 +15,7 @@ import time
 import config
 import grok
 
-POOL_SIZE = 4
+POOL_SIZE = 3  # per mode (product-only / with models)
 _lock = threading.Lock()
 _refilling = False
 _path = config.DATA_DIR / "fits.json"
@@ -52,21 +52,21 @@ def _write(pool: list) -> None:
     tmp.replace(_path)
 
 
-def build_one() -> dict:
+def build_one(models: bool = False) -> dict:
     """Build a random fit; one retry with a different style if the first
-    attempt yields too few product-only pieces."""
+    attempt yields too few usable pieces."""
     last: grok.GrokError | None = None
     for prompt in random.sample(STYLES, 2):
         try:
-            return _build(prompt)
+            return _build(prompt, models)
         except grok.GrokError as err:
             print(f"[fits] build '{prompt}' failed: {err}", file=sys.stderr)
             last = err
     raise last or grok.GrokError("Could not build a fit")
 
 
-def _build(prompt: str) -> dict:
-    items = grok.suggest(prompt, count=7)
+def _build(prompt: str, models: bool) -> dict:
+    items = grok.suggest(prompt, count=7, allow_models=models)
     # One piece per category: keep the first of each.
     seen, picked = set(), []
     for it in items:
@@ -76,7 +76,11 @@ def _build(prompt: str) -> dict:
         picked.append(it)
     if len(picked) < 3:
         raise grok.GrokError("Not enough distinct pieces for a fit")
-    return {"prompt": prompt, "items": picked}
+    return {"prompt": prompt, "models": models, "items": picked}
+
+
+def _short_modes(pool: list) -> list[bool]:
+    return [m for m in (False, True) if sum(1 for f in pool if bool(f.get("models")) == m) < POOL_SIZE]
 
 
 def _refill() -> None:
@@ -84,10 +88,11 @@ def _refill() -> None:
     try:
         while True:
             with _lock:
-                if len(_read()) >= POOL_SIZE:
-                    return
+                short = _short_modes(_read())
+            if not short:
+                return
             try:
-                fit = build_one()
+                fit = build_one(short[0])
             except grok.GrokError as err:
                 print(f"[fits] background build failed: {err}", file=sys.stderr)
                 return
@@ -107,23 +112,28 @@ def ensure_pool() -> None:
     if not config.XAI_API_KEY:
         return
     with _lock:
-        if _refilling or len(_read()) >= POOL_SIZE:
+        if _refilling or not _short_modes(_read()):
             return
         _refilling = True
     threading.Thread(target=_refill, daemon=True).start()
 
 
-def take() -> dict:
+def _pop(pool: list, models: bool):
+    idx = [i for i, f in enumerate(pool) if bool(f.get("models")) == models]
+    if not idx:
+        return None
+    return pool.pop(random.choice(idx))
+
+
+def take(models: bool = False) -> dict:
     """Return a random fit immediately if one is pooled, else build one now.
     The background refill only starts after a synchronous build, so the first
     load isn't competing with it for the API."""
     with _lock:
         pool = _read()
-        if pool:
-            fit = pool.pop(random.randrange(len(pool)))
+        fit = _pop(pool, models)
+        if fit:
             _write(pool)
-        else:
-            fit = None
     if fit is None and _refilling:
         # A background build is already running — wait for it instead of
         # starting a second search in parallel.
@@ -131,13 +141,13 @@ def take() -> dict:
             time.sleep(0.5)
             with _lock:
                 pool = _read()
-                if pool:
-                    fit = pool.pop(0)
+                fit = _pop(pool, models)
+                if fit:
                     _write(pool)
                     break
             if not _refilling:
                 break
     if fit is None:
-        fit = build_one()
+        fit = build_one(models)
     ensure_pool()
     return fit

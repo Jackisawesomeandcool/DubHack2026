@@ -71,21 +71,30 @@ def _get_session():
 
 
 # ---------------------------------------------------------------- vision pick
-def pick_product_only(candidates: list[str]) -> int:
-    """Index of the candidate that shows only the product (no person), or -1."""
+def pick_product_only(candidates: list[str], allow_models: bool = False) -> int:
+    """Index of the best candidate photo, or -1.
+
+    allow_models=False: only a photo with NO person is acceptable.
+    allow_models=True:  prefer the item worn on a model; anything clear is fine.
+    """
     if not candidates:
         return -1
     if not config.XAI_API_KEY:
         return 0
-    content = [{
-        "type": "text",
-        "text": (
+    if allow_models:
+        ask = (
+            "These are photos from one clothing listing. Which photo best shows the item being worn "
+            "on a model (full view, item clearly visible)? If none is on a model, pick the clearest "
+            'full view of the item. Reply with JSON only: {"index": <0-based index>}.'
+        )
+    else:
+        ask = (
             "These are photos from one clothing listing. Which photo shows ONLY the product "
             "(flat lay / on a plain background / on an invisible mannequin) with NO person, model, "
             "face, hands or body visible? Prefer the clearest full view of the item. "
             'Reply with JSON only: {"index": <0-based index>} or {"index": -1} if every photo includes a person.'
-        ),
-    }]
+        )
+    content = [{"type": "text", "text": ask}]
     for url in candidates:
         content.append({"type": "image_url", "image_url": {"url": url, "detail": "low"}})
     payload = {
@@ -148,10 +157,10 @@ def make_cutout(url: str) -> str | None:
 
 
 # ---------------------------------------------------------------- pipeline
-def resolve(item: dict) -> None:
-    """Fill item['image'] with a product-only cutout, or '' to drop the item."""
+def resolve(item: dict, allow_models: bool = False) -> None:
+    """Fill item['image'] with a cutout (product-only unless allow_models), or '' to drop it."""
     cache = _load_cache()
-    source_key = f"pick:{item.get('url') or item.get('image')}"
+    source_key = f"pick:{'m' if allow_models else 'p'}:{item.get('url') or item.get('image')}"
     chosen = cache.get(source_key, {}).get("src")
 
     if not chosen:
@@ -167,7 +176,7 @@ def resolve(item: dict) -> None:
         with ThreadPoolExecutor(max_workers=8) as pool:
             ok = list(pool.map(images.image_ok, cands))
         cands = [c for c, good in zip(cands, ok) if good][:MAX_CANDIDATES]
-        idx = pick_product_only(cands)
+        idx = pick_product_only(cands, allow_models)
         if idx < 0:
             print(f"[cutouts] no product-only photo among {len(cands)} for {item.get('name')}", file=sys.stderr)
         if idx < 0:
@@ -184,7 +193,7 @@ def resolve(item: dict) -> None:
         item["source_image"] = chosen
 
 
-def resolve_all(items: list[dict]) -> None:
+def resolve_all(items: list[dict], allow_models: bool = False) -> None:
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=min(4, max(1, len(items)))) as pool:
-        list(pool.map(resolve, items))
+        list(pool.map(lambda it: resolve(it, allow_models), items))

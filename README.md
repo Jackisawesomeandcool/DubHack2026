@@ -13,6 +13,10 @@ link; guests get the same popup and listing link.
 and ‹ › arrows appear on the piece. Each arrow press (or clicking a tray option) *tries* that product
 in place. Press **keep** to commit; **undo** or simply clicking away drops the change.
 
+**Models toggle.** The switch beside the prompt bar decides what gets pulled next: off = product-only
+cutouts (no people); on = the item worn on a model is allowed and preferred. It applies to searches,
+swap alternatives and new random fits; pieces already on the board are unchanged.
+
 **Images are real product cutouts.** Every photo comes from the product's own listing page. Grok's
 vision picks a photo that shows only the item — on-model shots with a person are rejected — and
 `rembg` removes the background, so each piece is a transparent PNG. Products without a usable

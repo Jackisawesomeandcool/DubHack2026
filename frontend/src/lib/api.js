@@ -14,11 +14,11 @@ async function request(path, options) {
 // current list every time something changes: first the products (no images),
 // then as each cutout arrives (items without a usable photo are removed).
 // Resolves with the final list.
-export async function suggest(prompt, category, exclude, onUpdate) {
+export async function suggest(prompt, category, exclude, onUpdate, models = false) {
   const res = await fetch('/api/suggest', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, category: category || null, exclude: exclude || [] }),
+    body: JSON.stringify({ prompt, category: category || null, exclude: exclude || [], models }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -60,6 +60,6 @@ export function loadShare(id) {
   return request(`/api/share/${encodeURIComponent(id)}`);
 }
 
-export function randomFit() {
-  return request('/api/random-fit');
+export function randomFit(models = false) {
+  return request(`/api/random-fit${models ? '?models=1' : ''}`);
 }

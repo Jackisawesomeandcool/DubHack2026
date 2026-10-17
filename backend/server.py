@@ -70,10 +70,10 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return data if isinstance(data, dict) else None
 
-    def _stream_suggest(self, prompt, category, exclude):
+    def _stream_suggest(self, prompt, category, exclude, models=False):
         """NDJSON stream: products first, then one line per finished cutout."""
         try:
-            gen = grok.suggest_stream(prompt, category, exclude)
+            gen = grok.suggest_stream(prompt, category, exclude, allow_models=models)
             first = next(gen)
         except (grok.GrokError, StopIteration) as err:
             print(f"[grok] {err}", file=sys.stderr)
@@ -111,9 +111,10 @@ class Handler(BaseHTTPRequestHandler):
             category = body.get("category")
             category = category if category in CATEGORIES else None
             exclude = [str(n)[:120] for n in body.get("exclude", []) if isinstance(n, str)][:12]
+            models = bool(body.get("models", False))
             if not _require_key(self):
                 return None
-            return self._stream_suggest(prompt, category, exclude)
+            return self._stream_suggest(prompt, category, exclude, models)
 
         if self.path == "/api/share":
             body = self._read_json()
@@ -125,11 +126,12 @@ class Handler(BaseHTTPRequestHandler):
         self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def do_GET(self):
-        if self.path == "/api/random-fit":
+        if self.path.split("?")[0] == "/api/random-fit":
             if not _require_key(self):
                 return None
+            models = "models=1" in self.path
             try:
-                return self._json(HTTPStatus.OK, fits.take())
+                return self._json(HTTPStatus.OK, fits.take(models))
             except grok.GrokError as err:
                 print(f"[grok] {err}", file=sys.stderr)
                 return self._json(HTTPStatus.BAD_GATEWAY, {"error": str(err)})

@@ -6,6 +6,7 @@ import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
+import ModelsToggle from './ModelsToggle.jsx';
 import { randomFit, suggest } from '../lib/api.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
 
@@ -25,6 +26,9 @@ export default function HaulCreator() {
 
   // Swap session for the selected piece: alternatives are previewed on the
   // board and only kept when the user says so.
+  const [models, setModels] = useState(() => { try { return localStorage.getItem('haul:models') === '1'; } catch { return false; } });
+  const modelsRef = useRef(models);
+  modelsRef.current = models;
   const [dragOut, setDragOut] = useState(null); // piece currently held outside the board
   const [swap, setSwap] = useState(null); // { uid, original, alts, index, loading, error }
   const swapRef = useRef(null);
@@ -44,7 +48,7 @@ export default function HaulCreator() {
     setLoadingFit(true);
     setFitError('');
     try {
-      const { items } = await randomFit();
+      const { items } = await randomFit(modelsRef.current);
       update(index, () => ({ items: withPositions(items) }));
     } catch (err) {
       setFitError(`couldn’t load a fit — ${err.message || 'try again'}`);
@@ -68,7 +72,7 @@ export default function HaulCreator() {
     setActiveId(id);
     try {
       const items = await suggest(prompt, null, fit.items.map((i) => i.name), (partial) =>
-        patchHistory(id, { options: partial, loading: false }));
+        patchHistory(id, { options: partial, loading: false }), modelsRef.current);
       patchHistory(id, { options: items, loading: false });
     } catch {
       patchHistory(id, { loading: false, error: 'couldn’t find that — try again' });
@@ -96,7 +100,7 @@ export default function HaulCreator() {
         const alts = list.filter((a) => !sameProduct(a, item));
         setSwap((s) => (s && s.uid === item.uid ? { ...s, alts, loading: false } : s));
       };
-      apply(await suggest(prompt, item.category, fit.items.map((i) => i.name), apply));
+      apply(await suggest(prompt, item.category, fit.items.map((i) => i.name), apply, modelsRef.current));
     } catch {
       setSwap((s) => (s && s.uid === item.uid ? { ...s, loading: false, error: 'couldn’t find alternatives' } : s));
     }
@@ -207,7 +211,10 @@ export default function HaulCreator() {
             onDismiss={() => { if (active) setActiveId(null); else { revertSwap(swapRef.current); setSwap(null); } }}
           />
         )}
-        <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
+        <div className="dock__row">
+          <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
+          <ModelsToggle value={models} onChange={(v) => { setModels(v); try { localStorage.setItem('haul:models', v ? '1' : '0'); } catch {} }} />
+        </div>
       </footer>
     </main>
   );
