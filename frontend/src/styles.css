@@ -176,7 +176,6 @@ button:focus-visible, input:focus-visible {
   inset: 0;
   transition: opacity var(--mid) var(--ease), filter var(--mid) var(--ease);
 }
-.canvas.is-busy .canvas__stage { opacity: 0.25; filter: saturate(0.4); }
 
 .canvas__hint {
   position: absolute;
@@ -210,12 +209,11 @@ button:focus-visible, input:focus-visible {
 /* ------------------------------------------------------------------ item */
 .item {
   position: absolute;
-  transform: translate(-50%, -50%) rotate(var(--rot));
+  transform: translate(-50%, -50%);
   display: block;
   cursor: pointer;
   border-radius: 18px;
-  animation: enter 520ms var(--ease) both;
-  animation-delay: var(--delay);
+  animation: enter 420ms var(--ease) both;
   transition: transform var(--mid) var(--ease), filter var(--mid) var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
@@ -234,27 +232,27 @@ button:focus-visible, input:focus-visible {
   pointer-events: none;
 }
 .item__art img {
-  max-height: calc(var(--u) * 46);
+  max-height: calc(var(--u) * 44);
   object-fit: contain;
   mix-blend-mode: multiply; /* white studio backgrounds dissolve into the canvas */
 }
 
 .item:hover,
 .item.is-selected {
-  transform: translate(-50%, -54%) rotate(var(--rot)) scale(1.05);
+  transform: translate(-50%, -53%) scale(1.04);
   z-index: 50;
 }
 .item:hover .item__art,
 .item.is-selected .item__art {
   filter: drop-shadow(0 22px 30px rgb(28 27 25 / 0.22));
 }
-.item:active { transform: translate(-50%, -52%) rotate(var(--rot)) scale(1.0); }
+.item:active { transform: translate(-50%, -52%) scale(1.0); }
 
 .item__price {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 6px);
-  transform: translate(-50%, 6px) rotate(calc(var(--rot) * -1)) scale(0.9);
+  transform: translate(-50%, 6px) scale(0.9);
   padding: 6px 11px;
   border-radius: var(--r-pill);
   background: var(--ink);
@@ -271,8 +269,119 @@ button:focus-visible, input:focus-visible {
 .item:hover .item__price,
 .item.is-selected .item__price {
   opacity: 1;
-  transform: translate(-50%, 0) rotate(calc(var(--rot) * -1)) scale(1);
+  transform: translate(-50%, 0) scale(1);
 }
+
+/* ------------------------------------------------------------------ empty slot */
+.slot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 50%;
+  border: 2px dashed var(--line);
+  color: var(--ink-3);
+  background: #fbfaf8;
+  animation: fade var(--mid) var(--ease);
+  transition: transform var(--fast) var(--ease), border-color var(--fast), color var(--fast), background var(--fast);
+}
+.slot__plus { font-size: calc(var(--u) * 3.2); font-weight: 500; line-height: 1; }
+.slot__label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.slot:hover { transform: translate(-50%, -50%) scale(1.05); border-color: var(--ink-3); color: var(--ink); background: #f7f5f1; }
+.slot.is-active { border-style: solid; border-color: var(--ink); color: var(--ink); background: #f3f0ea; }
+
+/* ------------------------------------------------------------------ options tray */
+.tray {
+  position: relative;
+  width: min(760px, 100%);
+  padding: 10px 44px 10px 12px;
+  background: var(--surface);
+  border-radius: 22px;
+  box-shadow: var(--shadow-md);
+  animation: rise var(--mid) var(--ease);
+}
+.tray__row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 4px 2px;
+}
+.tray__row::-webkit-scrollbar { display: none; }
+.tray__msg { margin: 6px 8px; font-size: 13px; color: var(--ink-3); }
+.tray__close {
+  position: absolute;
+  top: 10px; right: 10px;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  color: var(--ink-3);
+  font-size: 18px;
+  line-height: 1;
+  display: grid; place-items: center;
+  transition: background var(--fast), color var(--fast);
+}
+.tray__close:hover { background: #f1eee8; color: var(--ink); }
+
+.chip {
+  position: relative;
+  flex: none;
+  width: 108px;
+  height: 108px;
+  border-radius: 16px;
+  background: #faf8f5;
+  overflow: hidden;
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease), background var(--fast);
+}
+.chip:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); background: #fff; }
+.chip:active { transform: scale(0.96); }
+.chip__art { position: absolute; inset: 10px; display: grid; place-items: center; }
+.chip__art img, .chip__art .cutout {
+  max-width: 100%; max-height: 100%; width: auto; height: auto;
+  object-fit: contain; pointer-events: none; user-select: none;
+  mix-blend-mode: multiply;
+}
+.chip__price {
+  position: absolute;
+  left: 8px; bottom: 8px;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--fast), transform var(--fast) var(--ease);
+}
+.chip:hover .chip__price { opacity: 1; transform: none; }
+.chip__badge {
+  position: absolute;
+  top: 7px; right: 7px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--fast), color var(--fast), transform var(--fast) var(--ease);
+}
+.chip:hover .chip__badge { transform: scale(1.1); }
+.chip.is-on .chip__badge { background: var(--ok); color: #fff; }
+.chip.is-on { background: #eef7f1; }
+.chip--skeleton {
+  background: linear-gradient(90deg, #f1eee8 25%, #f8f6f2 50%, #f1eee8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+  animation-delay: var(--delay);
+}
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* ------------------------------------------------------------------ popup */
 .popup {
@@ -308,6 +417,17 @@ button:focus-visible, input:focus-visible {
   color: var(--ok);
 }
 .popup__stock.is-out { color: var(--out); }
+.popup__row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.popup__remove {
+  margin-top: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  padding: 2px 0;
+  transition: color var(--fast);
+}
+.popup__remove:hover { color: var(--out); }
 .popup__dot {
   width: 7px; height: 7px;
   border-radius: 50%;
@@ -317,7 +437,9 @@ button:focus-visible, input:focus-visible {
 /* ------------------------------------------------------------------ prompt dock */
 .dock {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 .prompt {
   display: flex;
@@ -344,6 +466,21 @@ button:focus-visible, input:focus-visible {
   color: var(--ink);
 }
 .prompt__input::placeholder { color: var(--ink-3); }
+.prompt__tag {
+  flex: none;
+  height: 30px;
+  padding: 0 11px;
+  margin-left: -10px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: popIn 180ms var(--ease);
+}
 .prompt__input:focus { outline: none; }
 .prompt__input:disabled { color: var(--ink-3); }
 .prompt__send {
@@ -363,8 +500,8 @@ button:focus-visible, input:focus-visible {
 
 /* ------------------------------------------------------------------ motion */
 @keyframes enter {
-  from { opacity: 0; transform: translate(-50%, -44%) rotate(var(--rot)) scale(0.92); }
-  to   { opacity: 1; transform: translate(-50%, -50%) rotate(var(--rot)) scale(1); }
+  from { opacity: 0; transform: translate(-50%, -46%) scale(0.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 @keyframes popIn {
   from { opacity: 0; transform: translateY(4px) scale(0.96); }
@@ -395,6 +532,7 @@ button:focus-visible, input:focus-visible {
   .total__label { display: none; }
   .share__btn { padding: 0 14px; }
   .prompt { height: 48px; }
+  .chip { width: 88px; height: 88px; }
 }
 @media (max-width: 520px) {
   .bar { flex-wrap: wrap; }

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import GarmentCutout from './GarmentCutout.jsx';
 import { formatPrice } from '../lib/haul.js';
 
-// One floating clothing piece. Hover reveals the price only; click opens the popup.
-export default function FashionItem({ item, place, index, selected, onSelect }) {
+// One piece on the board. Hover reveals the price only; click opens the popup.
+export default function FashionItem({ item, place, selected, onSelect }) {
   const [imgFailed, setImgFailed] = useState(false);
   const showImage = item.image && !imgFailed;
 
@@ -12,8 +12,6 @@ export default function FashionItem({ item, place, index, selected, onSelect }) 
     top: `${place.y}%`,
     width: `calc(var(--u) * ${place.w})`,
     zIndex: selected ? 60 : place.z,
-    '--rot': `${place.r}deg`,
-    '--delay': `${index * 55}ms`,
   };
 
   return (

@@ -1,81 +1,86 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import FitSelector from './FitSelector.jsx';
 import HaulTotal from './HaulTotal.jsx';
 import ShareControl from './ShareControl.jsx';
 import FashionCanvas from './FashionCanvas.jsx';
+import OptionsTray from './OptionsTray.jsx';
 import PromptBar from './PromptBar.jsx';
-import { curate } from '../lib/api.js';
-import { MAX_FITS, emptyFit, fitTotal } from '../lib/haul.js';
-
-// A random one of these seeds the first fit so the page opens on a real haul.
-const STARTER_PROMPTS = [
-  'late 2000s downtown fit with baggy pants and retro sneakers',
-  'all-black minimal fit with a windbreaker and low-tops',
-  'gorpcore trail fit with a fleece and ACG shoes',
-  'y2k streetwear with cargo pants and chunky sneakers',
-  'summer court fit with shorts, a tank and white sneakers',
-  'cozy fall fit with a tech fleece hoodie and dunks',
-  'skater fit with wide-leg pants and a graphic tee',
-  'clean athleisure fit in earth tones',
-];
-const STARTER_PROMPT = STARTER_PROMPTS[Math.floor(Math.random() * STARTER_PROMPTS.length)];
+import { suggest } from '../lib/api.js';
+import { MAX_FITS, emptyFit, fitTotal, itemKey, placeItem, removeItem } from '../lib/haul.js';
 
 export default function HaulCreator() {
   const [fits, setFits] = useState([emptyFit()]);
   const [current, setCurrent] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const booted = useRef(false);
+  const [focusCategory, setFocusCategory] = useState(null);
+
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const fit = fits[current];
   const total = useMemo(() => fitTotal(fit), [fit]);
+  const boardKeys = useMemo(() => new Set(fit.items.map(itemKey)), [fit]);
   const hasAnyItems = fits.some((f) => f.items.length);
 
-  async function generate(prompt, target = current) {
-    setBusy(true);
-    setFailed(false);
+  async function find(prompt, category) {
+    setLoading(true);
+    setError('');
     try {
-      const { items } = await curate(prompt);
-      setFits((prev) => prev.map((f, i) => (i === target ? { items } : f)));
+      const { items } = await suggest(prompt, category, fit.items.map((i) => i.name));
+      setOptions(items);
     } catch {
-      setFailed(true);
+      setOptions([]);
+      setError('couldn’t find that — try again');
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }
 
-  // Open on a real composition instead of an empty surface.
-  useEffect(() => {
-    if (booted.current) return;
-    booted.current = true;
-    generate(STARTER_PROMPT, 0);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  function pick(item) {
+    setFits((prev) => prev.map((f, i) => (i === current ? placeItem(f, item) : f)));
+    if (focusCategory === item.category) setFocusCategory(null);
+  }
+
+  function remove(item) {
+    setFits((prev) => prev.map((f, i) => (i === current ? removeItem(f, item) : f)));
+  }
 
   function addFit() {
     if (fits.length >= MAX_FITS) return;
     setFits((prev) => [...prev, emptyFit()]);
     setCurrent(fits.length);
+    setFocusCategory(null);
   }
 
   return (
     <main className="app">
       <header className="bar">
-        <FitSelector fits={fits} current={current} onSelect={setCurrent} onAdd={addFit} />
+        <FitSelector fits={fits} current={current} onSelect={(i) => { setCurrent(i); setFocusCategory(null); }} onAdd={addFit} />
         <div className="bar__right">
           <HaulTotal total={total} />
-          <ShareControl fits={fits} disabled={!hasAnyItems || busy} />
+          <ShareControl fits={fits} disabled={!hasAnyItems} />
         </div>
       </header>
 
       <FashionCanvas
         items={fit.items}
         fitKey={current}
-        busy={busy}
-        emptyHint={failed ? 'couldn’t curate that one — try again' : 'describe a fit below to fill this one'}
+        editable
+        focusCategory={focusCategory}
+        onSlotClick={(cat) => setFocusCategory((cur) => (cur === cat ? null : cat))}
+        onRemove={remove}
       />
 
       <footer className="dock">
-        <PromptBar onSubmit={(p) => generate(p)} busy={busy} />
+        <OptionsTray
+          options={options}
+          loading={loading}
+          error={error}
+          boardKeys={boardKeys}
+          onPick={pick}
+          onDismiss={() => { setOptions([]); setError(''); }}
+        />
+        <PromptBar onSubmit={find} busy={loading} category={focusCategory} onClearCategory={() => setFocusCategory(null)} />
       </footer>
     </main>
   );

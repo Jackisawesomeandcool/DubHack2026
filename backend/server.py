@@ -1,6 +1,7 @@
 """Haul Curator API — standard library only.
 
-    POST /api/curate          {"prompt": "..."}       -> {"items": [...], "source": "grok"|"demo"}
+    POST /api/suggest   {"prompt": "...", "category"?: "shoes", "exclude"?: [names]}
+                        -> {"items": [...options...], "source": "grok"|"demo"}
     POST /api/share           {"fits": [{"items":[...]}]} -> {"id": "..."}
     GET  /api/share/<id>                              -> {"fits": [...]}
 
@@ -19,18 +20,19 @@ import catalog
 import config
 import grok
 import store
+from products import CATEGORIES
 
 MAX_BODY = 256 * 1024
 MAX_PROMPT = 400
 
 
-def _curate(prompt: str) -> tuple[list[dict], str]:
+def _suggest(prompt: str, category: str | None, exclude: list[str]) -> tuple[list[dict], str]:
     """Grok with live web search when a key is configured. The offline catalog
     is only used when there is no key at all (local UI testing), never as a
     silent substitute for real search results."""
     if config.XAI_API_KEY:
-        return grok.curate(prompt), "grok"
-    return catalog.curate(prompt), "demo"
+        return grok.suggest(prompt, category, exclude), "grok"
+    return catalog.suggest(prompt, category, exclude), "demo"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -78,13 +80,16 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        if self.path == "/api/curate":
-            body = self._read_json()
-            prompt = str((body or {}).get("prompt", "")).strip()[:MAX_PROMPT]
+        if self.path == "/api/suggest":
+            body = self._read_json() or {}
+            prompt = str(body.get("prompt", "")).strip()[:MAX_PROMPT]
             if not prompt:
                 return self._json(HTTPStatus.BAD_REQUEST, {"error": "prompt required"})
+            category = body.get("category")
+            category = category if category in CATEGORIES else None
+            exclude = [str(n)[:120] for n in body.get("exclude", []) if isinstance(n, str)][:12]
             try:
-                items, source = _curate(prompt)
+                items, source = _suggest(prompt, category, exclude)
             except grok.GrokError as err:
                 print(f"[grok] {err}", file=sys.stderr)
                 return self._json(HTTPStatus.BAD_GATEWAY, {"error": str(err)})

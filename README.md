@@ -1,8 +1,11 @@
 # Haul — AI fashion haul curator
 
-Type a fashion prompt, get a cohesive haul of real clothing laid out as a floating collage.
-Hover a piece for its price, click it for name / brand / stock, switch between up to five fits,
-and share the haul as a read-only link.
+Build an outfit board from real listings. The board opens with empty "+" slots (jacket, top,
+bottoms, shoes, bag, hat, accessory). Type a piece or a vibe in the finder and a row of real
+product options appears above it; pick one to place it on the board — picking another option for
+the same slot swaps it out, Pinterest-style. Click an empty slot to point the finder at that
+category. Hover a piece for its price, click it for name / brand / stock (and remove), keep up to
+five fits, and share the haul as a read-only link.
 
 Two pages only: `/` (creator) and `/h/<id>` (shared guest view).
 
@@ -36,13 +39,14 @@ Open http://localhost:5173.
 
 ### How products are found
 
-With `XAI_API_KEY` set, the backend calls the xAI Responses API with the `web_search` tool and a
-strict JSON schema. Grok searches the live web for real, currently listed products and returns
-each one's product page URL. The backend then opens that page and pulls the retailer's own
+With `XAI_API_KEY` set, the backend calls the xAI Responses API with the `web_search` tool
+(filtered to `ALLOWED_DOMAINS`, default `nike.com`) and a strict JSON schema. Grok searches the
+store for real, currently listed products matching the request and returns each one's product
+page URL. The backend then opens that page and pulls the retailer's own
 product photo (`og:image`, Twitter card, or JSON-LD `Product.image`), verifies it serves an image,
 and sends it to the UI. Every visual comes directly from the listing site.
 
-A curation takes roughly 20–60 s because of the live search; the prompt bar shows a loading state.
+A search takes roughly 10–40 s; the options row shows a shimmer while it runs and the board stays usable.
 If Grok or the search fails, the UI shows "couldn't curate that one — try again" — it never
 substitutes placeholder items.
 
@@ -62,7 +66,7 @@ cd ../backend && python3 server.py      # serves frontend/dist and /api on :8000
 
 | Method | Path              | Body                        | Returns                       |
 |--------|-------------------|-----------------------------|-------------------------------|
-| POST   | `/api/curate`     | `{"prompt": "..."}`         | `{"items": [...], "source"}`  |
+| POST   | `/api/suggest`    | `{"prompt", "category"?, "exclude"?}` | `{"items": [...options], "source"}` |
 | POST   | `/api/share`      | `{"fits": [{"items": [...]}]}` | `{"id": "..."}`            |
 | GET    | `/api/share/<id>` | —                           | `{"fits": [...]}`             |
 

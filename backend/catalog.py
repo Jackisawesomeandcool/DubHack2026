@@ -1,98 +1,44 @@
-"""Offline curation used ONLY when XAI_API_KEY is not configured, so the UI
-can be exercised without network access. Entries are real products from real
-brands, but without Grok's live search there are no listing URLs to pull
-photos from, so the frontend renders garment cutouts. Set a key for real
-listings with real retailer images.
+"""Offline options used ONLY when XAI_API_KEY is not configured, so the UI
+can be exercised without network. Entries are real Nike products, but with
+no live search there are no verified photos, so the frontend renders cutouts.
 """
 
 import random
-import re
 
 from products import normalize_list
 
-_HAULS = {
-    "y2k_downtown": {
-        "keys": ["2000", "y2k", "downtown", "baggy", "boots", "grunge", "skate", "indie"],
-        "items": [
-            {"name": "Carpenter Jean", "brand": "Carhartt WIP", "price": 128, "stock": "in_stock", "category": "bottom", "color": "#5c6b80"},
-            {"name": "Detroit Jacket", "brand": "Carhartt WIP", "price": 198, "stock": "in_stock", "category": "outerwear", "color": "#3b3a37"},
-            {"name": "Essentials Reverse Weave Tee", "brand": "Champion", "price": 30, "stock": "in_stock", "category": "top", "color": "#e8e4dc"},
-            {"name": "1460 Smooth Leather Boot", "brand": "Dr. Martens", "price": 170, "stock": "in_stock", "category": "shoes", "color": "#1c1b1a"},
-            {"name": "Classic Supreme Backpack", "brand": "Herschel", "price": 70, "stock": "out_of_stock", "category": "bag", "color": "#6a4b32"},
-            {"name": "Lumberjack Trucker Hat", "brand": "Stüssy", "price": 48, "stock": "in_stock", "category": "headwear", "color": "#2a3a52"},
-        ],
-    },
-    "quiet_luxury": {
-        "keys": ["luxury", "minimal", "quiet", "neutral", "beige", "clean", "office", "tailored", "old money"],
-        "items": [
-            {"name": "Wool Cashmere Overcoat", "brand": "COS", "price": 350, "stock": "in_stock", "category": "outerwear", "color": "#b8a68c"},
-            {"name": "The Oversized Cashmere Crew", "brand": "Everlane", "price": 150, "stock": "in_stock", "category": "top", "color": "#efe9df"},
-            {"name": "Wide-Leg Wool Trousers", "brand": "Arket", "price": 149, "stock": "in_stock", "category": "bottom", "color": "#4a4745"},
-            {"name": "Modern Loafer", "brand": "Everlane", "price": 198, "stock": "in_stock", "category": "shoes", "color": "#2b2622"},
-            {"name": "Le Pliage Original Tote", "brand": "Longchamp", "price": 145, "stock": "in_stock", "category": "bag", "color": "#7a6a55"},
-            {"name": "Metal Frame Sunglasses", "brand": "Ray-Ban", "price": 171, "stock": "out_of_stock", "category": "accessory", "color": "#8c7a5a"},
-        ],
-    },
-    "gorpcore": {
-        "keys": ["gorp", "outdoor", "hiking", "trail", "techwear", "fleece", "rain", "pnw", "camp"],
-        "items": [
-            {"name": "Nuptse Jacket", "brand": "The North Face", "price": 320, "stock": "in_stock", "category": "outerwear", "color": "#1f2a3a"},
-            {"name": "Better Sweater Fleece", "brand": "Patagonia", "price": 159, "stock": "in_stock", "category": "top", "color": "#6b7f6a"},
-            {"name": "Convertible Hiking Pants", "brand": "Arc'teryx", "price": 190, "stock": "in_stock", "category": "bottom", "color": "#3f4a3f"},
-            {"name": "Moab 3 Hiking Shoe", "brand": "Merrell", "price": 120, "stock": "in_stock", "category": "shoes", "color": "#5a4a3a"},
-            {"name": "Hip Pack 1L", "brand": "Cotopaxi", "price": 40, "stock": "in_stock", "category": "bag", "color": "#d9623b"},
-            {"name": "Trail Cap", "brand": "Salomon", "price": 35, "stock": "out_of_stock", "category": "headwear", "color": "#222222"},
-        ],
-    },
-    "streetwear": {
-        "keys": ["street", "hype", "sneaker", "hoodie", "cargo", "oversized", "fit", "drip", "casual"],
-        "items": [
-            {"name": "Box Logo Hooded Sweatshirt", "brand": "Supreme", "price": 168, "stock": "out_of_stock", "category": "top", "color": "#1a1a1a"},
-            {"name": "Cargo Pant", "brand": "Carhartt WIP", "price": 158, "stock": "in_stock", "category": "bottom", "color": "#5e5a48"},
-            {"name": "Air Jordan 1 Mid", "brand": "Nike", "price": 125, "stock": "in_stock", "category": "shoes", "color": "#c2362f"},
-            {"name": "Varsity Jacket", "brand": "Stüssy", "price": 290, "stock": "in_stock", "category": "outerwear", "color": "#2d3e5a"},
-            {"name": "Crossbody Shoulder Bag", "brand": "Carhartt WIP", "price": 60, "stock": "in_stock", "category": "bag", "color": "#333333"},
-            {"name": "Reversible Beanie", "brand": "New Era", "price": 28, "stock": "in_stock", "category": "headwear", "color": "#8a8a8a"},
-        ],
-    },
-    "coastal_summer": {
-        "keys": ["summer", "beach", "coastal", "linen", "vacation", "sun", "resort", "boat", "hot"],
-        "items": [
-            {"name": "Linen Camp Collar Shirt", "brand": "Uniqlo", "price": 40, "stock": "in_stock", "category": "top", "color": "#e9dcc3"},
-            {"name": "Baggies Shorts 5\"", "brand": "Patagonia", "price": 65, "stock": "in_stock", "category": "bottom", "color": "#4f86b8"},
-            {"name": "Arizona Oiled Leather Sandal", "brand": "Birkenstock", "price": 135, "stock": "in_stock", "category": "shoes", "color": "#7a5a3a"},
-            {"name": "Woven Straw Tote", "brand": "Madewell", "price": 98, "stock": "in_stock", "category": "bag", "color": "#cfb27a"},
-            {"name": "Classic Round Sunglasses", "brand": "Ray-Ban", "price": 161, "stock": "in_stock", "category": "accessory", "color": "#1f1f1f"},
-            {"name": "Bucket Hat", "brand": "Kangol", "price": 50, "stock": "out_of_stock", "category": "headwear", "color": "#f1ece3"},
-        ],
-    },
-    "dark_academia": {
-        "keys": ["academia", "vintage", "library", "tweed", "autumn", "fall", "preppy", "classic", "oxford", "scholar"],
-        "items": [
-            {"name": "Wool Tweed Blazer", "brand": "J.Crew", "price": 298, "stock": "in_stock", "category": "outerwear", "color": "#5a4a3c"},
-            {"name": "Cable-Knit Turtleneck", "brand": "Ralph Lauren", "price": 165, "stock": "in_stock", "category": "top", "color": "#d8cdb8"},
-            {"name": "Pleated Wool Trousers", "brand": "Banana Republic", "price": 150, "stock": "in_stock", "category": "bottom", "color": "#2f2a26"},
-            {"name": "Penny Loafer", "brand": "G.H. Bass", "price": 175, "stock": "in_stock", "category": "shoes", "color": "#4a2a1a"},
-            {"name": "Leather Satchel", "brand": "Fossil", "price": 220, "stock": "out_of_stock", "category": "bag", "color": "#6b3f23"},
-            {"name": "Tortoise Round Glasses", "brand": "Warby Parker", "price": 95, "stock": "in_stock", "category": "accessory", "color": "#7a5230"},
-        ],
-    },
-}
+_ITEMS = [
+    {"name": "Sportswear Tech Fleece Windrunner Hoodie", "brand": "Nike", "price": 145, "category": "outerwear", "color": "#2b2b2b"},
+    {"name": "Windrunner Woven Jacket", "brand": "Nike", "price": 110, "category": "outerwear", "color": "#1f3a5a"},
+    {"name": "ACG Wolf Tree Pullover", "brand": "Nike", "price": 150, "category": "outerwear", "color": "#5c6b4f"},
+    {"name": "Sportswear Club Fleece Crew", "brand": "Nike", "price": 60, "category": "top", "color": "#8c8c8c"},
+    {"name": "Dri-FIT Legend Tee", "brand": "Nike", "price": 30, "category": "top", "color": "#efe9df"},
+    {"name": "Solo Swoosh Tee", "brand": "Nike", "price": 45, "category": "top", "color": "#1a1a1a"},
+    {"name": "Sportswear Tech Fleece Joggers", "brand": "Nike", "price": 120, "category": "bottom", "color": "#3a3a3a"},
+    {"name": "Club Cargo Pants", "brand": "Nike", "price": 80, "category": "bottom", "color": "#5e5a48"},
+    {"name": "Dri-FIT Challenger Shorts", "brand": "Nike", "price": 45, "category": "bottom", "color": "#222222"},
+    {"name": "Dunk Low Retro", "brand": "Nike", "price": 115, "category": "shoes", "color": "#2f4766"},
+    {"name": "Air Force 1 '07", "brand": "Nike", "price": 115, "category": "shoes", "color": "#f4f4f4"},
+    {"name": "P-6000", "brand": "Nike", "price": 115, "category": "shoes", "color": "#b9b4aa"},
+    {"name": "Heritage Crossbody Bag", "brand": "Nike", "price": 30, "category": "bag", "color": "#1a1a1a"},
+    {"name": "Brasilia 9.5 Training Backpack", "brand": "Nike", "price": 45, "category": "bag", "color": "#333333"},
+    {"name": "Club Unstructured Futura Wash Cap", "brand": "Nike", "price": 28, "category": "headwear", "color": "#d9d1c2"},
+    {"name": "Peak Beanie", "brand": "Nike", "price": 25, "category": "headwear", "color": "#1a1a1a"},
+    {"name": "Everyday Plus Cushioned Crew Socks", "brand": "Nike", "price": 22, "category": "accessory", "color": "#f1f1f1"},
+    {"name": "Elite Cuffed Belt", "brand": "Nike", "price": 25, "category": "accessory", "color": "#222222"},
+]
 
 
-def curate(prompt: str) -> list[dict]:
-    words = set(re.findall(r"[a-z0-9']+", prompt.lower()))
-    best, best_score = None, -1
-    for haul in _HAULS.values():
-        score = sum(1 for k in haul["keys"] if k in words or any(k in w for w in words))
-        if score > best_score:
-            best, best_score = haul, score
-    if best_score <= 0:
-        best = random.choice(list(_HAULS.values()))
-    items = [dict(it) for it in best["items"]]
-    # Small variation so repeated prompts feel alive: occasionally drop one accessory.
-    if len(items) > 5 and random.random() < 0.4:
-        extras = [i for i in items if i["category"] in ("accessory", "headwear", "bag")]
-        if extras:
-            items.remove(random.choice(extras))
-    return normalize_list(items)
+def suggest(prompt: str, category: str | None = None, exclude: list[str] | None = None) -> list[dict]:
+    pool = [dict(i, stock="in_stock") for i in _ITEMS if i["name"] not in set(exclude or [])]
+    if category:
+        pool = [i for i in pool if i["category"] == category]
+    random.shuffle(pool)
+    if not category:
+        seen, mixed = set(), []
+        for i in pool:
+            if i["category"] not in seen:
+                seen.add(i["category"])
+                mixed.append(i)
+        pool = mixed
+    return normalize_list(pool[: 4 if category else 6])

@@ -10,8 +10,12 @@ async function request(path, options) {
   return data;
 }
 
-export function curate(prompt) {
-  return request('/api/curate', { method: 'POST', body: JSON.stringify({ prompt }) });
+// Returns a few real product options for a request (optionally one category).
+export function suggest(prompt, category, exclude) {
+  return request('/api/suggest', {
+    method: 'POST',
+    body: JSON.stringify({ prompt, category: category || null, exclude: exclude || [] }),
+  });
 }
 
 export function createShare(fits) {

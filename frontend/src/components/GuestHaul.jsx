@@ -5,7 +5,7 @@ import FashionCanvas from './FashionCanvas.jsx';
 import { loadShare } from '../lib/api.js';
 import { fitTotal } from '../lib/haul.js';
 
-// Read-only view of a shared haul: same collage, same hover and click, no prompt bar.
+// Read-only view of a shared haul: same board, same hover and click, no finder.
 export default function GuestHaul({ shareId }) {
   const [fits, setFits] = useState(null);
   const [current, setCurrent] = useState(0);
@@ -32,8 +32,8 @@ export default function GuestHaul({ shareId }) {
       <FashionCanvas
         items={fit?.items || []}
         fitKey={current}
-        busy={!fits && !missing}
-        emptyHint={missing ? 'this haul link doesn’t exist' : ''}
+        loading={!fits && !missing}
+        hint={missing ? 'this haul link doesn’t exist' : ''}
       />
     </main>
   );

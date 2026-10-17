@@ -1,9 +1,9 @@
-"""Grok (xAI) clothing curation with live web search.
+"""Grok (xAI) product finder with live web search.
 
-Grok searches the web for real, currently listed products and returns the
-product page URL for each. The image is then pulled from that page by
-images.py, so every visual comes directly from the retailer's own site.
-The API key never leaves this process.
+Given a short request (and optionally one category), Grok searches the
+configured store(s) for real, currently listed products and returns a few
+options. Each option's photo is then pulled from its own product page by
+images.py. The API key never leaves this process.
 """
 
 import json
@@ -15,30 +15,30 @@ import config
 import images
 from products import CATEGORIES, normalize_list
 
-SYSTEM_PROMPT = f"""You curate fashion hauls. You never chat or explain.
+SYSTEM_PROMPT = f"""You find real clothing products. You never chat or explain.
 
-Given a style prompt, use web search to find exactly 5 REAL clothing products that are
-currently listed for sale online and together form one cohesive outfit. Be fast: one or two
-searches per product is enough; do not deliberate.
+Given a request, use web search to find REAL products that are currently listed for sale
+online and match the request. Return them as options. Be fast: one or two searches is
+enough; do not deliberate.
 
 Hard rules:
 - Every product must be a real listing you found via search. Use the exact product name
   and brand from the listing.
 - url: the direct product page URL (the page for that specific item, not a search or
-  category page). Prefer the brand's own site, otherwise a major retailer.
+  category page).
 - image: the direct URL of the main product photo from that page if you saw one; otherwise "".
 - price: current USD price as a number.
 - stock: "in_stock" unless the page says sold out / unavailable.
-- category: one of {", ".join(CATEGORIES)}. Use each at most once, except "accessory" (max 2).
-  Always include a top, a bottom and shoes.
+- category: one of {", ".join(CATEGORIES)}.
 - color: the product's dominant color as a 6-digit hex like "#2f4766".
+- Options must be distinct products. Do not include products listed under "already on the board".
 Return only JSON matching the schema."""
 
 if config.ALLOWED_DOMAINS:
     SYSTEM_PROMPT += (
         f"\n\nSTORE RESTRICTION: every product must be a listing on {', '.join(config.ALLOWED_DOMAINS)} "
-        "and url must point to a product page on that site. Interpret the style prompt using only "
-        "what that store sells (e.g. its own apparel, footwear, bags, hats, socks and accessories)."
+        "and url must point to a product page on that site. Interpret the request using only "
+        "what that store sells (its own apparel, footwear, bags, hats, socks and accessories)."
     )
 
 SCHEMA = {
@@ -104,13 +104,24 @@ def _parse_json(text: str) -> list:
     return data.get("items", []) if isinstance(data, dict) else data
 
 
-def _responses_with_search(prompt: str) -> list:
-    """Responses API + web_search tool + strict JSON schema."""
+def _user_message(prompt: str, category: str | None, exclude: list[str], count: int) -> str:
+    lines = [f"Request: {prompt}"]
+    if category:
+        lines.append(f"Only return products in the category: {category}.")
+    else:
+        lines.append("Return a mix of categories that would work together for this request.")
+    lines.append(f"Return exactly {count} options.")
+    if exclude:
+        lines.append("Already on the board (exclude): " + "; ".join(exclude[:12]))
+    return "\n".join(lines)
+
+
+def _responses_with_search(user: str) -> list:
     payload = {
         "model": config.XAI_MODEL,
         "input": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
+            {"role": "user", "content": user},
         ],
         "tools": [
             {"type": "web_search", "filters": {"allowed_domains": config.ALLOWED_DOMAINS}}
@@ -118,7 +129,7 @@ def _responses_with_search(prompt: str) -> list:
             else {"type": "web_search"}
         ],
         "text": {
-            "format": {"type": "json_schema", "name": "haul", "schema": SCHEMA, "strict": True}
+            "format": {"type": "json_schema", "name": "options", "schema": SCHEMA, "strict": True}
         },
     }
     if config.XAI_REASONING:
@@ -128,9 +139,9 @@ def _responses_with_search(prompt: str) -> list:
     except GrokError as err:
         if "reasoning" not in payload or "400" not in str(err):
             raise
-        # Account/model doesn't accept the reasoning knob — retry without it.
         payload.pop("reasoning")
         response = _post("/responses", payload)
+
     for item in response.get("output", []):
         if item.get("type") != "message":
             continue
@@ -140,17 +151,17 @@ def _responses_with_search(prompt: str) -> list:
     raise GrokError("No message output in xAI response")
 
 
-def _chat_completions(prompt: str) -> list:
+def _chat_completions(user: str) -> list:
     """Fallback without live search (model knowledge only)."""
     payload = {
         "model": config.XAI_MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
+            {"role": "user", "content": user},
         ],
         "response_format": {
             "type": "json_schema",
-            "json_schema": {"name": "haul", "schema": SCHEMA, "strict": True},
+            "json_schema": {"name": "options", "schema": SCHEMA, "strict": True},
         },
     }
     response = _post("/chat/completions", payload)
@@ -160,17 +171,20 @@ def _chat_completions(prompt: str) -> list:
         raise GrokError("Unexpected xAI response shape") from err
 
 
-def curate(prompt: str) -> list[dict]:
+def suggest(prompt: str, category: str | None = None, exclude: list[str] | None = None) -> list[dict]:
+    count = 4 if category else 6
+    user = _user_message(prompt, category, exclude or [], count)
     try:
-        raw = _responses_with_search(prompt)
+        raw = _responses_with_search(user)
     except GrokError as err:
         print(f"[grok] web search path failed ({err}); retrying without search", file=sys.stderr)
-        raw = _chat_completions(prompt)
+        raw = _chat_completions(user)
 
     items = normalize_list(raw)
+    if category:
+        items = [it for it in items if it["category"] == category] or items
     if not items:
         raise GrokError("Grok returned no usable products")
 
-    # Pull each product's photo from its own listing page.
     images.resolve_all(items)
     return items

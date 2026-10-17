@@ -3,9 +3,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 const GAP = 12;
 const MARGIN = 12;
 
-// Small floating card: name, brand, stock. Positioned next to the clicked item
-// and clamped so it always stays inside the viewport.
-export default function ProductPopup({ item, anchor, onClose }) {
+// Small floating card: name, brand, stock (+ remove when editing).
+// Positioned next to the clicked item and clamped inside the viewport.
+export default function ProductPopup({ item, anchor, onClose, onRemove }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
 
@@ -15,7 +15,6 @@ export default function ProductPopup({ item, anchor, onClose }) {
     const p = ref.current.getBoundingClientRect();
     const vw = window.innerWidth, vh = window.innerHeight;
 
-    // Prefer the right side of the item; flip left when there's no room.
     let left = a.right + GAP;
     if (left + p.width > vw - MARGIN) left = a.left - p.width - GAP;
     if (left < MARGIN) left = Math.min(Math.max(MARGIN, a.left + a.width / 2 - p.width / 2), vw - p.width - MARGIN);
@@ -54,9 +53,16 @@ export default function ProductPopup({ item, anchor, onClose }) {
     >
       <div className="popup__name">{item.name}</div>
       <div className="popup__brand">{item.brand}</div>
-      <div className={`popup__stock${inStock ? '' : ' is-out'}`}>
-        <span className="popup__dot" />
-        {inStock ? 'In Stock' : 'Out of Stock'}
+      <div className="popup__row">
+        <div className={`popup__stock${inStock ? '' : ' is-out'}`}>
+          <span className="popup__dot" />
+          {inStock ? 'In Stock' : 'Out of Stock'}
+        </div>
+        {onRemove && (
+          <button type="button" className="popup__remove" onClick={onRemove}>
+            remove
+          </button>
+        )}
       </div>
     </div>
   );
