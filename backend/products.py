@@ -1,16 +1,15 @@
-"""Product shape shared by the Grok path and the demo catalog.
+"""Product shape.
 
 Public fields (spec): name, brand, price, image, stock.
-Internal fields: url (listing page the image is pulled from), category, color (layout).
+Internal fields: url (listing page the image was pulled from), category,
+x / y (board position in percent, set when the user drags a piece).
 """
 
 import re
 
 CATEGORIES = ("outerwear", "top", "bottom", "shoes", "bag", "accessory", "headwear")
 STOCK_VALUES = ("in_stock", "out_of_stock")
-MAX_ITEMS = 7
-
-_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+MAX_ITEMS = 8
 
 
 def _category(value) -> str:
@@ -41,14 +40,17 @@ def _price(value) -> float:
     return round(max(0.0, min(price, 100000.0)), 2)
 
 
-def _image(value) -> str:
-    value = str(value or "").strip()
-    return value if value.startswith("https://") and len(value) < 2048 else ""
-
-
 def _url(value) -> str:
     value = str(value or "").strip()
     return value if value.startswith("http") and len(value) < 2048 else ""
+
+
+def _pct(value):
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return round(max(0.0, min(100.0, v)), 2)
 
 
 def normalize(raw: dict) -> dict | None:
@@ -58,17 +60,19 @@ def normalize(raw: dict) -> dict | None:
     brand = str(raw.get("brand") or "").strip()[:80]
     if not name or not brand:
         return None
-    color = str(raw.get("color") or "").strip()
-    return {
+    item = {
         "name": name,
         "brand": brand,
         "price": _price(raw.get("price")),
-        "image": _image(raw.get("image")),
+        "image": _url(raw.get("image")),
         "url": _url(raw.get("url")),
         "stock": _stock(raw.get("stock")),
         "category": _category(raw.get("category")),
-        "color": color if _HEX.match(color) else "#b9b4aa",
     }
+    x, y = _pct(raw.get("x")), _pct(raw.get("y"))
+    if x is not None and y is not None:
+        item["x"], item["y"] = x, y
+    return item
 
 
 def normalize_list(items) -> list[dict]:

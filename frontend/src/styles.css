@@ -237,11 +237,15 @@ button:focus-visible, input:focus-visible {
   mix-blend-mode: multiply; /* white studio backgrounds dissolve into the canvas */
 }
 
+.item.is-draggable { cursor: grab; touch-action: none; }
+.item.is-dragging { cursor: grabbing; transition: none; }
 .item:hover,
 .item.is-selected {
   transform: translate(-50%, -53%) scale(1.04);
   z-index: 50;
 }
+.item.is-dragging { transform: translate(-50%, -50%) scale(1.06); }
+.item.is-dragging .item__price { opacity: 0; }
 .item:hover .item__art,
 .item.is-selected .item__art {
   filter: drop-shadow(0 22px 30px rgb(28 27 25 / 0.22));
@@ -271,28 +275,6 @@ button:focus-visible, input:focus-visible {
   opacity: 1;
   transform: translate(-50%, 0) scale(1);
 }
-
-/* ------------------------------------------------------------------ empty slot */
-.slot {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  aspect-ratio: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  border-radius: 50%;
-  border: 2px dashed var(--line);
-  color: var(--ink-3);
-  background: #fbfaf8;
-  animation: fade var(--mid) var(--ease);
-  transition: transform var(--fast) var(--ease), border-color var(--fast), color var(--fast), background var(--fast);
-}
-.slot__plus { font-size: calc(var(--u) * 3.2); font-weight: 500; line-height: 1; }
-.slot__label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.slot:hover { transform: translate(-50%, -50%) scale(1.05); border-color: var(--ink-3); color: var(--ink); background: #f7f5f1; }
-.slot.is-active { border-style: solid; border-color: var(--ink); color: var(--ink); background: #f3f0ea; }
 
 /* ------------------------------------------------------------------ options tray */
 .tray {
@@ -466,21 +448,6 @@ button:focus-visible, input:focus-visible {
   color: var(--ink);
 }
 .prompt__input::placeholder { color: var(--ink-3); }
-.prompt__tag {
-  flex: none;
-  height: 30px;
-  padding: 0 11px;
-  margin-left: -10px;
-  border-radius: var(--r-pill);
-  background: var(--ink);
-  color: var(--accent-ink);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  animation: popIn 180ms var(--ease);
-}
 .prompt__input:focus { outline: none; }
 .prompt__input:disabled { color: var(--ink-3); }
 .prompt__send {

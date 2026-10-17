@@ -1,41 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
-import { SLOT_LABEL } from '../lib/haul.js';
+import { useState } from 'react';
 
 // Floating finder at the bottom. Submit -> options appear above it.
-// An optional category (from clicking an empty slot) narrows the search.
-export default function PromptBar({ onSubmit, busy, category, onClearCategory }) {
+export default function PromptBar({ onSubmit, busy }) {
   const [value, setValue] = useState('');
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (category) inputRef.current?.focus();
-  }, [category]);
 
   function submit(e) {
     e.preventDefault();
     const prompt = value.trim();
     if (!prompt || busy) return;
-    onSubmit(prompt, category);
+    onSubmit(prompt);
     setValue('');
   }
 
-  const placeholder = category ? `find ${SLOT_LABEL[category]}...` : 'describe a piece or a vibe...';
-
   return (
     <form className={`prompt${busy ? ' is-busy' : ''}`} onSubmit={submit}>
-      {category && (
-        <button type="button" className="prompt__tag" onClick={onClearCategory} aria-label="Search all pieces">
-          {SLOT_LABEL[category]} ×
-        </button>
-      )}
       <input
-        ref={inputRef}
         className="prompt__input"
         type="text"
         value={value}
         maxLength={400}
-        placeholder={placeholder}
-        aria-label={placeholder}
+        placeholder="find a piece to swap in..."
+        aria-label="Find a piece to swap in"
         onChange={(e) => setValue(e.target.value)}
         disabled={busy}
       />

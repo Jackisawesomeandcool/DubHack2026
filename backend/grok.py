@@ -30,7 +30,6 @@ Hard rules:
 - price: current USD price as a number.
 - stock: "in_stock" unless the page says sold out / unavailable.
 - category: one of {", ".join(CATEGORIES)}.
-- color: the product's dominant color as a 6-digit hex like "#2f4766".
 - Options must be distinct products. Do not include products listed under "already on the board".
 Return only JSON matching the schema."""
 
@@ -56,9 +55,8 @@ SCHEMA = {
                     "image": {"type": "string"},
                     "stock": {"type": "string", "enum": ["in_stock", "out_of_stock"]},
                     "category": {"type": "string", "enum": list(CATEGORIES)},
-                    "color": {"type": "string"},
                 },
-                "required": ["name", "brand", "price", "url", "image", "stock", "category", "color"],
+                "required": ["name", "brand", "price", "url", "image", "stock", "category"],
                 "additionalProperties": False,
             },
         }
@@ -171,8 +169,8 @@ def _chat_completions(user: str) -> list:
         raise GrokError("Unexpected xAI response shape") from err
 
 
-def suggest(prompt: str, category: str | None = None, exclude: list[str] | None = None) -> list[dict]:
-    count = 4 if category else 6
+def suggest(prompt: str, category: str | None = None, exclude: list[str] | None = None, count: int | None = None) -> list[dict]:
+    count = count or (4 if category else 6)
     user = _user_message(prompt, category, exclude or [], count)
     try:
         raw = _responses_with_search(user)
@@ -186,5 +184,9 @@ def suggest(prompt: str, category: str | None = None, exclude: list[str] | None 
     if not items:
         raise GrokError("Grok returned no usable products")
 
+    # Only real photos pulled from the listing itself; anything unverified is dropped.
     images.resolve_all(items)
+    items = [it for it in items if it["image"]]
+    if not items:
+        raise GrokError("No options with a verifiable product photo")
     return items

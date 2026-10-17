@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import GarmentCutout from './GarmentCutout.jsx';
 import { formatPrice, itemKey } from '../lib/haul.js';
 
 function OptionChip({ item, onBoard, onPick }) {
-  const [imgFailed, setImgFailed] = useState(false);
-  const showImage = item.image && !imgFailed;
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
   return (
     <button
       type="button"
@@ -13,11 +12,7 @@ function OptionChip({ item, onBoard, onPick }) {
       aria-label={`${onBoard ? 'On board: ' : 'Add '}${item.name}, ${formatPrice(item.price)}`}
     >
       <span className="chip__art">
-        {showImage ? (
-          <img src={item.image} alt="" draggable="false" onError={() => setImgFailed(true)} />
-        ) : (
-          <GarmentCutout category={item.category} color={item.color} />
-        )}
+        <img src={item.image} alt="" draggable="false" onError={() => setFailed(true)} />
       </span>
       <span className="chip__price">{formatPrice(item.price)}</span>
       <span className="chip__badge" aria-hidden="true">{onBoard ? '✓' : '+'}</span>
@@ -25,8 +20,8 @@ function OptionChip({ item, onBoard, onPick }) {
   );
 }
 
-// Options from the finder, sitting just above the prompt bar. Pick one to
-// place it on the board (it swaps out whatever is in that slot).
+// Options from the finder, just above the prompt bar. Pick one to place it on
+// the board; it swaps out whatever is in that slot.
 export default function OptionsTray({ options, loading, error, boardKeys, onPick, onDismiss }) {
   if (!loading && !error && options.length === 0) return null;
 

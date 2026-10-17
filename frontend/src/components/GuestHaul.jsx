@@ -3,7 +3,7 @@ import FitSelector from './FitSelector.jsx';
 import HaulTotal from './HaulTotal.jsx';
 import FashionCanvas from './FashionCanvas.jsx';
 import { loadShare } from '../lib/api.js';
-import { fitTotal } from '../lib/haul.js';
+import { fitTotal, withPositions } from '../lib/haul.js';
 
 // Read-only view of a shared haul: same board, same hover and click, no finder.
 export default function GuestHaul({ shareId }) {
@@ -13,7 +13,7 @@ export default function GuestHaul({ shareId }) {
 
   useEffect(() => {
     loadShare(shareId)
-      .then((data) => setFits(data.fits || []))
+      .then((data) => setFits((data.fits || []).map((f) => ({ items: withPositions(f.items) }))))
       .catch(() => setMissing(true));
   }, [shareId]);
 

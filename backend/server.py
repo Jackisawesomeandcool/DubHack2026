@@ -1,7 +1,8 @@
 """Haul Curator API — standard library only.
 
+    GET  /api/random-fit                              -> {"prompt": "...", "items": [...]}
     POST /api/suggest   {"prompt": "...", "category"?: "shoes", "exclude"?: [names]}
-                        -> {"items": [...options...], "source": "grok"|"demo"}
+                        -> {"items": [...options...]}
     POST /api/share           {"fits": [{"items":[...]}]} -> {"id": "..."}
     GET  /api/share/<id>                              -> {"fits": [...]}
 
@@ -16,8 +17,8 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import catalog
 import config
+import fits
 import grok
 import store
 from products import CATEGORIES
@@ -26,13 +27,11 @@ MAX_BODY = 256 * 1024
 MAX_PROMPT = 400
 
 
-def _suggest(prompt: str, category: str | None, exclude: list[str]) -> tuple[list[dict], str]:
-    """Grok with live web search when a key is configured. The offline catalog
-    is only used when there is no key at all (local UI testing), never as a
-    silent substitute for real search results."""
+def _require_key(handler) -> bool:
     if config.XAI_API_KEY:
-        return grok.suggest(prompt, category, exclude), "grok"
-    return catalog.suggest(prompt, category, exclude), "demo"
+        return True
+    handler._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "XAI_API_KEY not configured"})
+    return False
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -88,12 +87,14 @@ class Handler(BaseHTTPRequestHandler):
             category = body.get("category")
             category = category if category in CATEGORIES else None
             exclude = [str(n)[:120] for n in body.get("exclude", []) if isinstance(n, str)][:12]
+            if not _require_key(self):
+                return None
             try:
-                items, source = _suggest(prompt, category, exclude)
+                items = grok.suggest(prompt, category, exclude)
             except grok.GrokError as err:
                 print(f"[grok] {err}", file=sys.stderr)
                 return self._json(HTTPStatus.BAD_GATEWAY, {"error": str(err)})
-            return self._json(HTTPStatus.OK, {"items": items, "source": source})
+            return self._json(HTTPStatus.OK, {"items": items})
 
         if self.path == "/api/share":
             body = self._read_json()
@@ -105,6 +106,14 @@ class Handler(BaseHTTPRequestHandler):
         self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def do_GET(self):
+        if self.path == "/api/random-fit":
+            if not _require_key(self):
+                return None
+            try:
+                return self._json(HTTPStatus.OK, fits.take())
+            except grok.GrokError as err:
+                print(f"[grok] {err}", file=sys.stderr)
+                return self._json(HTTPStatus.BAD_GATEWAY, {"error": str(err)})
         m = re.fullmatch(r"/api/share/([A-Za-z0-9_-]{4,32})", self.path)
         if m:
             shared = store.load(m.group(1))
@@ -133,8 +142,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    mode = "Grok (xAI)" if config.XAI_API_KEY else "demo catalog (set XAI_API_KEY to enable Grok)"
-    print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  curation: {mode}")
+    mode = f"Grok (xAI) · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}" if config.XAI_API_KEY else "NO KEY — set XAI_API_KEY in backend/.env"
+    print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
+    fits.ensure_pool()
     ThreadingHTTPServer((config.HOST, config.PORT), Handler).serve_forever()
 
 

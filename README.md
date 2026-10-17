@@ -1,11 +1,13 @@
 # Haul — AI fashion haul curator
 
-Build an outfit board from real listings. The board opens with empty "+" slots (jacket, top,
-bottoms, shoes, bag, hat, accessory). Type a piece or a vibe in the finder and a row of real
-product options appears above it; pick one to place it on the board — picking another option for
-the same slot swaps it out, Pinterest-style. Click an empty slot to point the finder at that
-category. Hover a piece for its price, click it for name / brand / stock (and remove), keep up to
-five fits, and share the haul as a read-only link.
+Every fit opens as a completely random outfit of real, currently listed products with their real
+product photos. Type a piece in the finder and a row of real options appears above it; pick one to
+swap it into the board, Pinterest-style. Drag pieces anywhere on the board to rearrange them. Hover
+a piece for its price, click it for name / brand / stock (and remove), keep up to five fits, and
+share the haul — positions included — as a read-only link.
+
+Images are never generated or drawn: every photo is pulled from the product's own listing page and
+verified; a product whose photo can't be verified is dropped.
 
 Two pages only: `/` (creator) and `/h/<id>` (shared guest view).
 
@@ -46,14 +48,12 @@ page URL. The backend then opens that page and pulls the retailer's own
 product photo (`og:image`, Twitter card, or JSON-LD `Product.image`), verifies it serves an image,
 and sends it to the UI. Every visual comes directly from the listing site.
 
-A search takes roughly 10–40 s; the options row shows a shimmer while it runs and the board stays usable.
-If Grok or the search fails, the UI shows "couldn't curate that one — try again" — it never
-substitutes placeholder items.
+**Random fits are pre-built.** On startup the backend builds a small pool of complete random fits in
+the background (stored in `backend/data/fits.json`), so `GET /api/random-fit` returns instantly and
+the pool refills after each one is used. Only the very first load on a fresh install waits for a live
+search (~10–40 s). Finder searches run live and show a shimmer row while they work.
 
-### Without an xAI key (UI testing only)
-
-If `XAI_API_KEY` is empty the backend serves a small offline catalog so the interface can be
-exercised with no network. Those entries have no listing URLs, so they render as garment cutouts.
+An xAI key is required; there is no offline mode.
 
 ## Production-style single process
 
@@ -66,10 +66,11 @@ cd ../backend && python3 server.py      # serves frontend/dist and /api on :8000
 
 | Method | Path              | Body                        | Returns                       |
 |--------|-------------------|-----------------------------|-------------------------------|
+| GET    | `/api/random-fit` | —                           | `{"prompt", "items": [...]}`  |
 | POST   | `/api/suggest`    | `{"prompt", "category"?, "exclude"?}` | `{"items": [...options], "source"}` |
 | POST   | `/api/share`      | `{"fits": [{"items": [...]}]}` | `{"id": "..."}`            |
 | GET    | `/api/share/<id>` | —                           | `{"fits": [...]}`             |
 
 Product shape: `name`, `brand`, `price`, `image`, `stock` (`in_stock` / `out_of_stock`),
-plus internal `url` (the listing page the image was pulled from), `category` and `color`
-(collage placement).
+plus internal `url` (the listing page the image was pulled from), `category`, and `x` / `y`
+(board position in percent, saved with shares).

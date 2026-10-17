@@ -25,3 +25,7 @@ export function createShare(fits) {
 export function loadShare(id) {
   return request(`/api/share/${encodeURIComponent(id)}`);
 }
+
+export function randomFit() {
+  return request('/api/random-fit');
+}
