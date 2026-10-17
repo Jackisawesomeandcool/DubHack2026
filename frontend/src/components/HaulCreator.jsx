@@ -7,7 +7,7 @@ import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import { randomFit, suggest } from '../lib/api.js';
-import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, itemKey, moveItem, removeItem, swapItem, withPositions } from '../lib/haul.js';
+import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, swapItem, withPositions } from '../lib/haul.js';
 
 const MAX_HISTORY = 6;
 
@@ -26,7 +26,6 @@ export default function HaulCreator() {
 
   const fit = fits[current];
   const total = useMemo(() => fitTotal(fit), [fit]);
-  const boardKeys = useMemo(() => new Set(fit.items.map(itemKey)), [fit]);
   const hasAnyItems = fits.some((f) => f.items.length);
   const active = history.find((h) => h.id === activeId) || null;
 
@@ -79,7 +78,7 @@ export default function HaulCreator() {
         <FitSelector fits={fits} current={current} onSelect={setCurrent} onAdd={loadingFit ? undefined : addFit} />
         <div className="bar__right">
           <HaulTotal total={total} />
-          <ShareControl fits={fits} disabled={!hasAnyItems || loadingFit} />
+          <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
         </div>
       </header>
 
@@ -92,9 +91,9 @@ export default function HaulCreator() {
         onMove={(item, x, y) => update(current, (f) => moveItem(f, item, x, y))}
         onRemove={(item) => update(current, (f) => removeItem(f, item))}
         onSelectionChange={setSelected}
-      >
-        <SearchHistory entries={history} activeId={activeId} onSelect={setActiveId} />
-      </FashionCanvas>
+      />
+
+      <SearchHistory entries={history} activeId={activeId} onSelect={setActiveId} />
 
       <footer className="dock">
         {active && (
@@ -102,7 +101,7 @@ export default function HaulCreator() {
             options={active.options}
             loading={active.loading}
             error={active.error}
-            boardKeys={boardKeys}
+            isOnBoard={(item) => onBoard(fit, item)}
             full={fit.items.length >= MAX_ITEMS}
             swapMode={Boolean(selected)}
             onSwap={(item) => { if (selected) update(current, (f) => swapItem(f, selected, item)); }}

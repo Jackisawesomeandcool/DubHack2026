@@ -37,7 +37,7 @@ function OptionChip({ item, onBoard, swapMode, full, onSwap, onAdd }) {
 // Options from the finder, just above the prompt bar.
 //   "+"  adds the piece to the board (up to the board limit)
 //   chip with a piece selected on the board swaps that piece out
-export default function OptionsTray({ options, loading, error, boardKeys, full, swapMode, onSwap, onAdd, onDismiss }) {
+export default function OptionsTray({ options, loading, error, isOnBoard, full, swapMode, onSwap, onAdd, onDismiss }) {
   if (!loading && !error && options.length === 0) return null;
 
   return (
@@ -56,7 +56,7 @@ export default function OptionsTray({ options, loading, error, boardKeys, full, 
             <OptionChip
               key={itemKey(item)}
               item={item}
-              onBoard={boardKeys.has(itemKey(item))}
+              onBoard={isOnBoard(item)}
               swapMode={swapMode}
               full={full}
               onSwap={onSwap}
