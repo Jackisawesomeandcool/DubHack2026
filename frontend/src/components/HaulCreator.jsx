@@ -7,7 +7,18 @@ import PromptBar from './PromptBar.jsx';
 import { curate } from '../lib/api.js';
 import { MAX_FITS, emptyFit, fitTotal } from '../lib/haul.js';
 
-const STARTER_PROMPT = 'late 2000s downtown outfit with baggy jeans and boots';
+// A random one of these seeds the first fit so the page opens on a real haul.
+const STARTER_PROMPTS = [
+  'late 2000s downtown outfit with baggy jeans and boots',
+  'quiet luxury neutral layers for a city weekend',
+  'gorpcore trail-to-cafe fit with a fleece and hiking shoes',
+  'y2k streetwear with cargo pants and chunky sneakers',
+  'coastal summer linen fit with sandals and a tote',
+  'dark academia fall look with loafers and a wool coat',
+  'skater fit with wide-leg denim and a graphic tee',
+  'minimal all-black fit with leather boots',
+];
+const STARTER_PROMPT = STARTER_PROMPTS[Math.floor(Math.random() * STARTER_PROMPTS.length)];
 
 export default function HaulCreator() {
   const [fits, setFits] = useState([emptyFit()]);

@@ -17,8 +17,9 @@ from products import CATEGORIES, normalize_list
 
 SYSTEM_PROMPT = f"""You curate fashion hauls. You never chat or explain.
 
-Given a style prompt, use web search to find 5 to 7 REAL clothing products that are
-currently listed for sale online and together form one cohesive outfit.
+Given a style prompt, use web search to find exactly 5 REAL clothing products that are
+currently listed for sale online and together form one cohesive outfit. Be fast: one or two
+searches per product is enough; do not deliberate.
 
 Hard rules:
 - Every product must be a real listing you found via search. Use the exact product name
@@ -109,7 +110,16 @@ def _responses_with_search(prompt: str) -> list:
             "format": {"type": "json_schema", "name": "haul", "schema": SCHEMA, "strict": True}
         },
     }
-    response = _post("/responses", payload)
+    if config.XAI_REASONING:
+        payload["reasoning"] = {"effort": config.XAI_REASONING}
+    try:
+        response = _post("/responses", payload)
+    except GrokError as err:
+        if "reasoning" not in payload or "400" not in str(err):
+            raise
+        # Account/model doesn't accept the reasoning knob — retry without it.
+        payload.pop("reasoning")
+        response = _post("/responses", payload)
     for item in response.get("output", []):
         if item.get("type") != "message":
             continue

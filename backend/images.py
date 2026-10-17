@@ -17,8 +17,8 @@ from html import unescape
 from html.parser import HTMLParser
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-PAGE_TIMEOUT = 12
-IMAGE_TIMEOUT = 8
+PAGE_TIMEOUT = 8
+IMAGE_TIMEOUT = 5
 MAX_PAGE_BYTES = 2_000_000
 
 

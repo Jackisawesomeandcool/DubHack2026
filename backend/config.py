@@ -26,6 +26,8 @@ _load_dotenv(BACKEND_DIR / ".env")
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "").strip()
 # Web search + structured output need a Grok 4 family model.
 XAI_MODEL = os.environ.get("XAI_MODEL", "grok-4.7").strip()
+# Lower reasoning effort = faster curation. Set empty to use the model default.
+XAI_REASONING = os.environ.get("XAI_REASONING", "low").strip()
 XAI_BASE_URL = os.environ.get("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/")
 
 HOST = os.environ.get("HOST", "127.0.0.1")
