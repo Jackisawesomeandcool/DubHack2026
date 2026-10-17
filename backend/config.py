@@ -34,6 +34,14 @@ XAI_VISION_MODEL = os.environ.get("XAI_VISION_MODEL", "").strip() or XAI_MODEL
 ALLOWED_DOMAINS = [d.strip() for d in os.environ.get("ALLOWED_DOMAINS", "nike.com").split(",") if d.strip()][:5]
 XAI_BASE_URL = os.environ.get("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/")
 
+# Background removal. Product-only photos on flat backgrounds are keyed locally
+# (free, instant). For everything else: "photoroom" or "removebg" if a key is
+# set (fast, ~1-2 s, paid per image), otherwise local rembg (free, slow).
+PHOTOROOM_API_KEY = os.environ.get("PHOTOROOM_API_KEY", "").strip()
+REMOVEBG_API_KEY = os.environ.get("REMOVEBG_API_KEY", "").strip()
+CUTOUT_PROVIDER = os.environ.get("CUTOUT_PROVIDER", "").strip().lower() or (
+    "photoroom" if PHOTOROOM_API_KEY else "removebg" if REMOVEBG_API_KEY else "local")
+
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8000"))
 

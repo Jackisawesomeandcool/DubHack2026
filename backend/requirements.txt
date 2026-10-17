@@ -1,4 +1,7 @@
-# Background removal for product cutouts (downloads a ~180MB model on first run)
-rembg>=2.0.60
-onnxruntime>=1.17
+# Required
 pillow>=10
+
+# Optional: local AI background removal for on-model photos / busy backgrounds
+# (installed automatically on first need unless PHOTOROOM_API_KEY / REMOVEBG_API_KEY is set)
+# rembg>=2.0.60
+# onnxruntime>=1.17

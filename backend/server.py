@@ -196,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     mode = f"Grok (xAI) · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}" if config.XAI_API_KEY else "NO KEY — set XAI_API_KEY in backend/.env"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
-    print(f"catalog: {catalog.count()} items · cutouts: {'ready' if cutouts.available() else 'installing…'}")
+    print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER}")
     cutouts.warm()
     catalog.warm(lambda term, models: finder.find(term, models, local_first=False))
     stock.start()

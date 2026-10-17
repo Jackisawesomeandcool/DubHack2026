@@ -15,14 +15,13 @@ rembg is installed automatically on first run if missing.
 
 import base64
 import hashlib
-import importlib
 import io
 import json
-import subprocess
 import sys
 import threading
 import urllib.request
 
+import bgremove
 import config
 import images
 
@@ -32,53 +31,15 @@ MAX_SIDE = 800
 VISION_SIDE = 384
 
 _lock = threading.Lock()
-_infer = threading.Semaphore(2)  # rembg is memory-hungry; at most 2 at once
-_session = None
 _cache_path = config.DATA_DIR / "cutouts.json"
 _cache: dict[str, dict] | None = None
 
-Image = None
-_rembg = None
-
-
-def _try_import() -> bool:
-    global Image, _rembg
-    try:
-        from PIL import Image as _Image
-        _rembg = importlib.import_module("rembg")
-        Image = _Image
-        return True
-    except Exception:  # noqa: BLE001
-        return False
-
-
-def ensure_installed() -> bool:
-    """Import rembg, installing it (and onnxruntime, pillow) if needed."""
-    if _try_import():
-        return True
-    req = config.BACKEND_DIR / "requirements.txt"
-    print("[cutouts] rembg not found — installing (one time, ~1 min)…", file=sys.stderr)
-    try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(req)], check=True)
-    except Exception as err:  # noqa: BLE001
-        print(f"[cutouts] automatic install failed: {err}\n"
-              f"          run manually:  {sys.executable} -m pip install -r {req}", file=sys.stderr)
-        return False
-    ok = _try_import()
-    print("[cutouts] rembg ready" if ok else "[cutouts] rembg still unavailable after install", file=sys.stderr)
-    return ok
-
-
 def available() -> bool:
-    return _rembg is not None
+    return bgremove.ready()
 
 
 def warm() -> None:
-    """Install if needed and load the model in the background."""
-    def run():
-        if ensure_installed():
-            _get_session()
-    threading.Thread(target=run, daemon=True).start()
+    bgremove.warm()
 
 
 def _load_cache() -> dict:
@@ -96,14 +57,6 @@ def _save_cache() -> None:
     _cache_path.write_text(json.dumps(_cache), encoding="utf-8")
 
 
-def _get_session():
-    global _session
-    with _lock:
-        if _session is None and _rembg is not None:
-            _session = _rembg.new_session("isnet-general-use")
-        return _session
-
-
 # ---------------------------------------------------------------- fetch
 def _download(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": images.UA, "Accept": "image/*,*/*"})
@@ -113,10 +66,10 @@ def _download(url: str) -> bytes:
 
 def _thumb_data_url(raw: bytes) -> str | None:
     """Small JPEG data URL for the vision check (xAI needn't fetch the CDN)."""
-    if Image is None:
+    if not bgremove.ready():
         return None
     try:
-        im = Image.open(io.BytesIO(raw)).convert("RGB")
+        im = bgremove.Image.open(io.BytesIO(raw)).convert("RGB")
         im.thumbnail((VISION_SIDE, VISION_SIDE))
         buf = io.BytesIO()
         im.save(buf, "JPEG", quality=80)
@@ -171,20 +124,24 @@ def pick(candidates: list[bytes | None], allow_models: bool) -> int:
 
 
 # ---------------------------------------------------------------- cutout
-def make_cutout(url: str, raw: bytes | None = None) -> str | None:
+def make_cutout(url: str, raw: bytes | None = None, allow_flat: bool = True) -> str | None:
     """Served path of a transparent PNG for this photo, or None."""
     cache = _load_cache()
     hit = cache.get(url)
     if hit and (CUTOUT_DIR / hit["file"]).exists():
         return f"/cutouts/{hit['file']}"
-    if not available() and not ensure_installed():
+    if not available():
         return None
     try:
         raw = raw or _download(url)
-        im = Image.open(io.BytesIO(raw)).convert("RGBA")
-        im.thumbnail((MAX_SIDE, MAX_SIDE))
-        with _infer:
-            out = _rembg.remove(im, session=_get_session(), post_process_mask=True)
+        im = bgremove.Image.open(io.BytesIO(raw))
+        if max(im.size) > MAX_SIDE:  # keep work small
+            im.thumbnail((MAX_SIDE, MAX_SIDE))
+            buf = io.BytesIO(); im.convert("RGB").save(buf, "JPEG", quality=92); raw = buf.getvalue()
+        out, tier = bgremove.remove(raw, allow_flat=allow_flat)
+        if out is None:
+            print(f"[cutouts] no background remover available for {url}", file=sys.stderr)
+            return None
         bbox = out.getchannel("A").getbbox()
         if not bbox:
             return None
@@ -193,7 +150,7 @@ def make_cutout(url: str, raw: bytes | None = None) -> str | None:
         CUTOUT_DIR.mkdir(parents=True, exist_ok=True)
         out.save(CUTOUT_DIR / name, "PNG", optimize=True)
         with _lock:
-            cache[url] = {"file": name}
+            cache[url] = {"file": name, "tier": tier}
             _save_cache()
         return f"/cutouts/{name}"
     except Exception as err:  # noqa: BLE001
@@ -244,7 +201,7 @@ def resolve(item: dict, allow_models: bool = False) -> None:
             cache[source_key] = {"src": chosen}
             _save_cache()
 
-    path = make_cutout(chosen, raw)
+    path = make_cutout(chosen, raw, allow_flat=True)
     item["image"] = path or ""
     for k in ("image_product", "image_model"):
         item.pop(k, None)

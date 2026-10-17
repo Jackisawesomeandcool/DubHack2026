@@ -39,7 +39,7 @@ Two terminals.
 ```bash
 cd backend
 cp .env.example .env              # add your XAI_API_KEY
-python3 server.py                 # installs rembg automatically on first run (~1 min + 180 MB model)
+python3 server.py                 # needs only Pillow (installed automatically if missing)
 ```
 
 **2. Frontend (port 5173)**
@@ -79,11 +79,19 @@ cd backend && python3 ingest.py            # product-only cutouts
 cd backend && python3 ingest.py --models   # also on-model cutouts
 ```
 
-**Cutout pipeline.** For each product the backend gathers candidate photos (the page's `og:image`,
-JSON-LD images, and the one Grok saw), asks Grok (vision) which one shows only the product with no
-person, then runs `rembg` (isnet) to strip the background and trims the result. Cutouts are cached
-in `backend/data/cutouts/` and served at `/cutouts/<id>.png`; each source photo is processed once.
-Without `rembg` installed the server warns at startup and falls back to the chosen photo as-is.
+**Cutout pipeline.** For each product the backend picks the right photo (nike.com's API hands over a
+product-only and an on-model photo directly; otherwise Grok's vision chooses among the listing's
+photos, sent as base64) and removes the background in the cheapest tier that works:
+
+1. **flat-key** — product photos on a flat light backdrop (Nike's product shots, most flat lays):
+   flood-filled from the edges and keyed transparent. ~80 ms, free, Pillow only. This covers the
+   default product-only mode almost entirely.
+2. **API** — Photoroom or remove.bg if `PHOTOROOM_API_KEY` / `REMOVEBG_API_KEY` is set in `.env`
+   (~1–2 s per image, paid). Used for on-model shots and busy backgrounds.
+3. **local rembg** — free, slow, heavy install; only installed on first need if no API key is set.
+
+Cutouts are cached in `backend/data/cutouts/` and served at `/cutouts/<id>.png`; every photo is
+processed once, so API usage stays at one call per new product.
 
 **Random fits are pre-built.** On startup the backend builds a small pool of complete random fits in
 the background (stored in `backend/data/fits.json`), so `GET /api/random-fit` returns instantly and
