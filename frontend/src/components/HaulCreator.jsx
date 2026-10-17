@@ -6,7 +6,6 @@ import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
-import DateTag from './DateTag.jsx';
 import ControlHints from './ControlHints.jsx';
 import { randomFit, suggest } from '../lib/api.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, swapItem, withPositions } from '../lib/haul.js';
@@ -77,24 +76,25 @@ export default function HaulCreator() {
   return (
     <main className="app">
       <header className="bar">
-        <FitSelector fits={fits} current={current} onSelect={setCurrent} onAdd={loadingFit ? undefined : addFit} />
         <div className="bar__right">
           <HaulTotal total={total} />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
-          <DateTag />
         </div>
       </header>
 
-      <FashionCanvas
-        items={fit.items}
-        fitKey={current}
-        editable
-        loading={loadingFit}
-        hint={fitError}
-        onMove={(item, x, y) => update(current, (f) => moveItem(f, item, x, y))}
-        onRemove={(item) => update(current, (f) => removeItem(f, item))}
-        onSelectionChange={setSelected}
-      />
+      <div className="stage">
+        <FitSelector fits={fits} current={current} onSelect={setCurrent} onAdd={loadingFit ? undefined : addFit} />
+        <FashionCanvas
+          items={fit.items}
+          fitKey={current}
+          editable
+          loading={loadingFit}
+          hint={fitError}
+          onMove={(item, x, y) => update(current, (f) => moveItem(f, item, x, y))}
+          onRemove={(item) => update(current, (f) => removeItem(f, item))}
+          onSelectionChange={setSelected}
+        />
+      </div>
 
       <SearchHistory entries={history} activeId={activeId} onSelect={setActiveId} />
 
