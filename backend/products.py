@@ -9,7 +9,7 @@ import re
 
 CATEGORIES = ("outerwear", "top", "bottom", "shoes", "bag", "accessory", "headwear")
 STOCK_VALUES = ("in_stock", "out_of_stock")
-MAX_ITEMS = 8
+MAX_ITEMS = 10
 
 
 def _category(value) -> str:

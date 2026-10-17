@@ -1,6 +1,7 @@
 import { placeFor } from './layout.js';
 
 export const MAX_FITS = 5;
+export const MAX_ITEMS = 10;
 
 export function emptyFit() {
   return { items: [] };
@@ -22,25 +23,40 @@ export function itemKey(item) {
   return `${item.brand}|${item.name}`;
 }
 
-// Give every item a board position (kept if it already has one, e.g. from a share).
-export function withPositions(items) {
-  const used = {};
-  return items.map((item) => {
-    if (typeof item.x === 'number' && typeof item.y === 'number') return item;
-    const n = used[item.category] || 0;
-    used[item.category] = n + 1;
-    const p = placeFor(item.category);
-    return { ...item, x: p.x + n * 8, y: p.y + n * 6 };
-  });
+// A free position for a new piece: its category's home spot if nothing is
+// there yet, otherwise stepped away from it so pieces don't stack exactly.
+function freePosition(items, category) {
+  const home = placeFor(category);
+  const taken = (x, y) => items.some((i) => Math.abs(i.x - x) < 3 && Math.abs(i.y - y) < 3);
+  for (let n = 0; n < 12; n++) {
+    const x = Math.min(92, home.x + n * 7);
+    const y = Math.min(92, home.y + n * 5);
+    if (!taken(x, y)) return { x, y };
+  }
+  return { x: 50, y: 50 };
 }
 
-// Place an option on the board. If that slot is taken, the new piece inherits
-// the old one's position (a swap); otherwise it takes the slot's home position.
-export function placeItem(fit, item) {
-  const old = fit.items.find((i) => i.category === item.category);
-  const rest = fit.items.filter((i) => i !== old);
-  const pos = old ? { x: old.x, y: old.y } : placeFor(item.category);
-  return { items: [...rest, { ...item, x: pos.x, y: pos.y }] };
+// Give every item a board position (kept if it already has one, e.g. from a share).
+export function withPositions(items) {
+  const placed = [];
+  for (const item of items) {
+    if (typeof item.x === 'number' && typeof item.y === 'number') placed.push(item);
+    else placed.push({ ...item, ...freePosition(placed, item.category) });
+  }
+  return placed;
+}
+
+// "+" on an option: add it as another piece (up to MAX_ITEMS).
+export function addItem(fit, item) {
+  if (fit.items.length >= MAX_ITEMS) return fit;
+  if (fit.items.some((i) => itemKey(i) === itemKey(item))) return fit;
+  return { items: [...fit.items, { ...item, ...freePosition(fit.items, item.category) }] };
+}
+
+// Swap: the new piece takes the selected piece's spot on the board.
+export function swapItem(fit, oldItem, item) {
+  if (fit.items.some((i) => i !== oldItem && itemKey(i) === itemKey(item))) return removeItem(fit, oldItem);
+  return { items: fit.items.map((i) => (i === oldItem ? { ...item, x: oldItem.x, y: oldItem.y } : i)) };
 }
 
 export function removeItem(fit, item) {

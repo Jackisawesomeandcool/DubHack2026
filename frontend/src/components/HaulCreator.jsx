@@ -4,27 +4,34 @@ import HaulTotal from './HaulTotal.jsx';
 import ShareControl from './ShareControl.jsx';
 import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
+import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import { randomFit, suggest } from '../lib/api.js';
-import { MAX_FITS, emptyFit, fitTotal, itemKey, moveItem, placeItem, removeItem, withPositions } from '../lib/haul.js';
+import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, itemKey, moveItem, removeItem, swapItem, withPositions } from '../lib/haul.js';
+
+const MAX_HISTORY = 6;
 
 export default function HaulCreator() {
   const [fits, setFits] = useState([emptyFit()]);
   const [current, setCurrent] = useState(0);
   const [loadingFit, setLoadingFit] = useState(false);
   const [fitError, setFitError] = useState('');
+  const [selected, setSelected] = useState(null); // piece selected on the board
 
-  const [options, setOptions] = useState([]);
-  const [finding, setFinding] = useState(false);
-  const [findError, setFindError] = useState('');
+  // Search history: each entry keeps its prompt and the options it returned.
+  const [history, setHistory] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const nextId = useRef(1);
   const booted = useRef(false);
 
   const fit = fits[current];
   const total = useMemo(() => fitTotal(fit), [fit]);
   const boardKeys = useMemo(() => new Set(fit.items.map(itemKey)), [fit]);
   const hasAnyItems = fits.some((f) => f.items.length);
+  const active = history.find((h) => h.id === activeId) || null;
 
   const update = (index, fn) => setFits((prev) => prev.map((f, i) => (i === index ? fn(f) : f)));
+  const patchHistory = (id, patch) => setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, ...patch } : h)));
 
   // Every fit starts as a random real fit.
   async function loadRandom(index) {
@@ -47,16 +54,14 @@ export default function HaulCreator() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function find(prompt) {
-    setFinding(true);
-    setFindError('');
+    const id = nextId.current++;
+    setHistory((prev) => [{ id, prompt, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
+    setActiveId(id);
     try {
       const { items } = await suggest(prompt, null, fit.items.map((i) => i.name));
-      setOptions(items);
+      patchHistory(id, { options: items, loading: false });
     } catch {
-      setOptions([]);
-      setFindError('couldn’t find that — try again');
-    } finally {
-      setFinding(false);
+      patchHistory(id, { loading: false, error: 'couldn’t find that — try again' });
     }
   }
 
@@ -65,14 +70,13 @@ export default function HaulCreator() {
     const index = fits.length;
     setFits((prev) => [...prev, emptyFit()]);
     setCurrent(index);
-    setOptions([]);
     loadRandom(index);
   }
 
   return (
     <main className="app">
       <header className="bar">
-        <FitSelector fits={fits} current={current} onSelect={(i) => { setCurrent(i); setOptions([]); }} onAdd={loadingFit ? undefined : addFit} />
+        <FitSelector fits={fits} current={current} onSelect={setCurrent} onAdd={loadingFit ? undefined : addFit} />
         <div className="bar__right">
           <HaulTotal total={total} />
           <ShareControl fits={fits} disabled={!hasAnyItems || loadingFit} />
@@ -87,18 +91,26 @@ export default function HaulCreator() {
         hint={fitError}
         onMove={(item, x, y) => update(current, (f) => moveItem(f, item, x, y))}
         onRemove={(item) => update(current, (f) => removeItem(f, item))}
-      />
+        onSelectionChange={setSelected}
+      >
+        <SearchHistory entries={history} activeId={activeId} onSelect={setActiveId} />
+      </FashionCanvas>
 
       <footer className="dock">
-        <OptionsTray
-          options={options}
-          loading={finding}
-          error={findError}
-          boardKeys={boardKeys}
-          onPick={(item) => update(current, (f) => placeItem(f, item))}
-          onDismiss={() => { setOptions([]); setFindError(''); }}
-        />
-        <PromptBar onSubmit={find} busy={finding} />
+        {active && (
+          <OptionsTray
+            options={active.options}
+            loading={active.loading}
+            error={active.error}
+            boardKeys={boardKeys}
+            full={fit.items.length >= MAX_ITEMS}
+            swapMode={Boolean(selected)}
+            onSwap={(item) => { if (selected) update(current, (f) => swapItem(f, selected, item)); }}
+            onAdd={(item) => update(current, (f) => addItem(f, item))}
+            onDismiss={() => setActiveId(null)}
+          />
+        )}
+        <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
       </footer>
     </main>
   );

@@ -3,8 +3,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 const GAP = 12;
 const MARGIN = 12;
 
-// Small floating card: name, brand, stock (+ remove when editing).
-// Positioned next to the clicked item and clamped inside the viewport.
+function host(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'listing'; }
+}
+
+// Small floating card: name, brand, stock, link to the listing (+ remove when
+// editing). Positioned next to the clicked item and clamped inside the viewport.
+// Clicks in the dock (options / finder) keep it open so a swap can be picked.
 export default function ProductPopup({ item, anchor, onClose, onRemove }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
@@ -28,6 +33,7 @@ export default function ProductPopup({ item, anchor, onClose, onRemove }) {
     const onKey = (e) => e.key === 'Escape' && onClose();
     const onDown = (e) => {
       if (ref.current?.contains(e.target) || anchor?.contains(e.target)) return;
+      if (e.target.closest?.('.dock')) return;
       onClose();
     };
     const onResize = () => onClose();
@@ -64,6 +70,11 @@ export default function ProductPopup({ item, anchor, onClose, onRemove }) {
           </button>
         )}
       </div>
+      {item.url && (
+        <a className="popup__link" href={item.url} target="_blank" rel="noopener noreferrer">
+          view on {host(item.url)} ↗
+        </a>
+      )}
     </div>
   );
 }

@@ -4,8 +4,18 @@ import ProductPopup from './ProductPopup.jsx';
 import { itemKey } from '../lib/haul.js';
 
 // The outfit board. Pieces are real product photos; in edit mode they can be
-// dragged anywhere on the board and removed from the popup.
-export default function FashionCanvas({ items, fitKey, editable = false, onMove, onRemove, loading = false, hint = '' }) {
+// dragged anywhere on the board, swapped from the options tray, and removed.
+export default function FashionCanvas({
+  items,
+  fitKey,
+  editable = false,
+  onMove,
+  onRemove,
+  onSelectionChange,
+  loading = false,
+  hint = '',
+  children,
+}) {
   const ref = useRef(null);
   const [selected, setSelected] = useState(null); // { key, anchor }
 
@@ -24,8 +34,10 @@ export default function FashionCanvas({ items, fitKey, editable = false, onMove,
 
   useEffect(() => setSelected(null), [fitKey]);
 
+  const selectedItem = (selected && items.find((i) => itemKey(i) === selected.key)) || null;
+  useEffect(() => { onSelectionChange?.(selectedItem); }, [selectedItem]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const close = useCallback(() => setSelected(null), []);
-  const selectedItem = selected && items.find((i) => itemKey(i) === selected.key);
 
   return (
     <section ref={ref} className={`canvas${loading ? ' is-loading' : ''}`} aria-label="Outfit board">
@@ -45,6 +57,8 @@ export default function FashionCanvas({ items, fitKey, editable = false, onMove,
           />
         ))}
       </div>
+
+      {children}
 
       {hint && items.length === 0 && !loading && <p className="canvas__hint">{hint}</p>}
 

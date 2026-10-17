@@ -1,10 +1,13 @@
 # Haul — AI fashion haul curator
 
 Every fit opens as a completely random outfit of real, currently listed products with their real
-product photos. Type a piece in the finder and a row of real options appears above it; pick one to
-swap it into the board, Pinterest-style. Drag pieces anywhere on the board to rearrange them. Hover
-a piece for its price, click it for name / brand / stock (and remove), keep up to five fits, and
-share the haul — positions included — as a read-only link.
+product photos. Type a piece in the finder and a row of real options appears above it: press **+**
+on an option to add it to the board (up to 10 pieces), or select a piece on the board first and
+click an option to swap it in — the new piece takes the old one's spot. Each prompt is kept as a
+small speech bubble beside the board; click one to bring its options back. Drag pieces anywhere to
+rearrange them. Hover a piece for its price, click it for name / brand / stock, a direct link to the
+listing, and remove. Keep up to five fits and share the haul — positions included — as a read-only
+link; guests get the same popup and listing link.
 
 Images are never generated or drawn: every photo is pulled from the product's own listing page and
 verified; a product whose photo can't be verified is dropped.
