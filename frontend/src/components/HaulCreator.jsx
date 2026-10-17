@@ -7,7 +7,7 @@ import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import ModelsToggle from './ModelsToggle.jsx';
-import { randomFit, suggest } from '../lib/api.js';
+import { health, randomFit, suggest } from '../lib/api.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
 
 const MAX_HISTORY = 7;
@@ -29,6 +29,7 @@ export default function HaulCreator() {
   const [models, setModels] = useState(() => { try { return localStorage.getItem('haul:models') === '1'; } catch { return false; } });
   const modelsRef = useRef(models);
   modelsRef.current = models;
+  const [setup, setSetup] = useState(null); // backend readiness notice
   const [dragOut, setDragOut] = useState(null); // piece currently held outside the board
   const [swap, setSwap] = useState(null); // { uid, original, alts, index, loading, error }
   const swapRef = useRef(null);
@@ -61,6 +62,18 @@ export default function HaulCreator() {
     if (booted.current) return;
     booted.current = true;
     loadRandom(0);
+    // Until background removal is ready on the backend, say so.
+    let timer;
+    const check = async () => {
+      try {
+        const h = await health();
+        if (!h.key) setSetup('backend has no XAI_API_KEY — add it to backend/.env');
+        else if (!h.cutouts) { setSetup('preparing cutouts (installing background removal)…'); timer = setTimeout(check, 4000); }
+        else setSetup(null);
+      } catch { setSetup('backend not running — start python3 server.py'); timer = setTimeout(check, 4000); }
+    };
+    check();
+    return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Click the error message to try loading again.
@@ -196,6 +209,7 @@ export default function HaulCreator() {
       <SearchHistory entries={history} activeId={activeId} onSelect={setActiveId} />
 
       <footer className="dock">
+        {setup && <div className="notice">{setup}</div>}
         {showTray && (
           <OptionsTray
             title={swap && !active ? `swap ${swap.original.category === 'bottom' ? 'bottoms' : swap.original.category}` : ''}

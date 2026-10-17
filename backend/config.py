@@ -28,6 +28,8 @@ XAI_API_KEY = os.environ.get("XAI_API_KEY", "").strip()
 XAI_MODEL = os.environ.get("XAI_MODEL", "grok-4.7").strip()
 # Lower reasoning effort = faster curation. Set empty to use the model default.
 XAI_REASONING = os.environ.get("XAI_REASONING", "low").strip()
+# Model used for the photo check (needs image input). Defaults to XAI_MODEL.
+XAI_VISION_MODEL = os.environ.get("XAI_VISION_MODEL", "").strip() or XAI_MODEL
 # Restrict curation to these retailer domains (comma-separated, max 5). Empty = whole web.
 ALLOWED_DOMAINS = [d.strip() for d in os.environ.get("ALLOWED_DOMAINS", "nike.com").split(",") if d.strip()][:5]
 XAI_BASE_URL = os.environ.get("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/")

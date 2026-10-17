@@ -17,8 +17,10 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import catalog
 import config
 import cutouts
+import finder
 import fits
 import grok
 import store
@@ -73,7 +75,7 @@ class Handler(BaseHTTPRequestHandler):
     def _stream_suggest(self, prompt, category, exclude, models=False):
         """NDJSON stream: products first, then one line per finished cutout."""
         try:
-            gen = grok.suggest_stream(prompt, category, exclude, allow_models=models)
+            gen = finder.stream(prompt, category, exclude, models)
             first = next(gen)
         except (grok.GrokError, StopIteration) as err:
             print(f"[grok] {err}", file=sys.stderr)
@@ -126,6 +128,12 @@ class Handler(BaseHTTPRequestHandler):
         self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def do_GET(self):
+        if self.path == "/api/health":
+            return self._json(HTTPStatus.OK, {
+                "key": bool(config.XAI_API_KEY),
+                "cutouts": cutouts.available(),
+                "catalog": catalog.count(),
+            })
         if self.path.split("?")[0] == "/api/random-fit":
             if not _require_key(self):
                 return None
@@ -180,9 +188,9 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     mode = f"Grok (xAI) · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}" if config.XAI_API_KEY else "NO KEY — set XAI_API_KEY in backend/.env"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
-    if not cutouts.available():
-        print("WARNING: rembg not installed — run `pip install -r requirements.txt` for transparent cutouts", file=sys.stderr)
+    print(f"catalog: {catalog.count()} items · cutouts: {'ready' if cutouts.available() else 'installing…'}")
     cutouts.warm()
+    catalog.warm(lambda term, models: finder.find(term, models, local_first=False))
     fits.ensure_pool()
     ThreadingHTTPServer((config.HOST, config.PORT), Handler).serve_forever()
 

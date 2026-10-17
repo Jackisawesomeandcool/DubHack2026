@@ -77,6 +77,9 @@ def normalize(raw: dict) -> dict | None:
         "stock": _stock(raw.get("stock")),
         "category": _category(raw.get("category")),
     }
+    for k in ("image_product", "image_model"):  # hints from fast sources, used by cutouts
+        if raw.get(k):
+            item[k] = _url(raw.get(k))
     x, y = _pct(raw.get("x")), _pct(raw.get("y"))
     if x is not None and y is not None:
         item["x"], item["y"] = x, y

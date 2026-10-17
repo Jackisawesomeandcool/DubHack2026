@@ -38,9 +38,8 @@ Two terminals.
 
 ```bash
 cd backend
-pip install -r requirements.txt   # rembg + onnxruntime (~180 MB model downloads on first run)
 cp .env.example .env              # add your XAI_API_KEY
-python3 server.py
+python3 server.py                 # installs rembg automatically on first run (~1 min + 180 MB model)
 ```
 
 **2. Frontend (port 5173)**
@@ -61,6 +60,14 @@ store for real, currently listed products matching the request and returns each 
 page URL. The backend then opens that page and pulls the retailer's own
 product photo (`og:image`, Twitter card, or JSON-LD `Product.image`), verifies it serves an image,
 and sends it to the UI. Every visual comes directly from the listing site.
+
+**Speed: local catalog + nike.com search API.** On startup the backend warms a local catalog of
+popular Nike items (dunks, AF1, tech fleece, …) in the background, each stored with its finished
+cutout in `backend/data/catalog.json`. Random fits are assembled from the catalog in milliseconds,
+swap alternatives and most searches are answered from it instantly, and live searches go to nike.com's
+own product-search API first (sub-second; it returns a product-only photo and an on-model photo, so no
+vision call is needed) with Grok's web search as the fallback. Everything that comes back with a
+cutout joins the catalog, so the app gets faster the more it's used.
 
 **Cutout pipeline.** For each product the backend gathers candidate photos (the page's `og:image`,
 JSON-LD images, and the one Grok saw), asks Grok (vision) which one shows only the product with no

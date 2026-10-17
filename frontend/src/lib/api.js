@@ -28,7 +28,8 @@ export async function suggest(prompt, category, exclude, onUpdate, models = fals
   let items = [];
   const emit = () => onUpdate?.(items.filter((i) => !i.dropped));
   const handle = (ev) => {
-    if (ev.items) items = ev.items.map((i) => ({ ...i, pending: true }));
+    if (ev.items) items = [...items, ...ev.items.map((i) => ({ ...i, pending: !i.image }))]; // catalog hits: ready
+    else if (ev.append) items = [...items, ...ev.append.map((i) => ({ ...i, pending: true }))]; // live: photos follow
     else if (ev.image) items[ev.index] = { ...items[ev.index], image: ev.image, pending: false };
     else if (ev.drop) items[ev.index] = { ...items[ev.index], dropped: true };
     emit();
@@ -58,6 +59,10 @@ export function createShare(fits) {
 
 export function loadShare(id) {
   return request(`/api/share/${encodeURIComponent(id)}`);
+}
+
+export function health() {
+  return request('/api/health');
 }
 
 export function randomFit(models = false) {

@@ -12,7 +12,9 @@ import sys
 import threading
 import time
 
+import catalog
 import config
+import finder
 import grok
 
 POOL_SIZE = 3  # per mode (product-only / with models)
@@ -66,7 +68,9 @@ def build_one(models: bool = False) -> dict:
 
 
 def _build(prompt: str, models: bool) -> dict:
-    items = grok.suggest(prompt, count=7, allow_models=models)
+    items = finder.find(prompt, models, count=7, local_first=False)
+    if not items:
+        raise grok.GrokError("No pieces with a usable photo")
     # One piece per category: keep the first of each.
     seen, picked = set(), []
     for it in items:
@@ -126,9 +130,12 @@ def _pop(pool: list, models: bool):
 
 
 def take(models: bool = False) -> dict:
-    """Return a random fit immediately if one is pooled, else build one now.
-    The background refill only starts after a synchronous build, so the first
-    load isn't competing with it for the API."""
+    """Random fit, instantly when possible: from the local catalog of popular
+    items, else from the pre-built pool, else built live."""
+    quick = catalog.random_fit(models)
+    if quick:
+        ensure_pool()
+        return quick
     with _lock:
         pool = _read()
         fit = _pop(pool, models)
