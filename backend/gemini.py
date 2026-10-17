@@ -37,12 +37,13 @@ class GeminiError(Exception):
 
 
 def _url(model: str) -> str:
-    return f"{config.GEMINI_BASE_URL}/models/{model}:generateContent?key={config.GEMINI_API_KEY}"
+    return f"{config.GEMINI_BASE_URL}/models/{model}:generateContent"
 
 
 def _post(model: str, payload: dict, timeout: int = 120) -> dict:
     req = urllib.request.Request(_url(model), data=json.dumps(payload).encode("utf-8"),
-                                 headers={"Content-Type": "application/json"}, method="POST")
+                                 headers={"Content-Type": "application/json", "x-goog-api-key": config.GEMINI_API_KEY},
+                                 method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
