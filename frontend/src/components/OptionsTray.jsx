@@ -90,6 +90,9 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
             <span aria-hidden="true">★</span> {favMode ? 'back to suggestions' : `swap to favorites${favCount ? ` (${favCount})` : ''}`}
           </button>
         )}
+        <button type="button" className="tray__close" onClick={onDismiss} aria-label="Close options and zoom in on the board">
+          zoom in
+        </button>
       </div>
       {loading && (
         <div className="tray__row">
@@ -122,9 +125,6 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
         </div>
       )}
       {!loading && !error && full && !swapMode && <p className="tray__note">board is full — select a piece to swap it</p>}
-      <button type="button" className="tray__close" onClick={onDismiss} aria-label="Close options and zoom in on the board">
-        zoom in
-      </button>
     </div>
   );
 }

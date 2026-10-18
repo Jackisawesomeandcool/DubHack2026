@@ -474,7 +474,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .tray {
   position: relative;
   width: min(820px, 100%);
-  padding: 4px 92px 2px 4px;
+  padding: 4px 4px 2px;
   animation: rise var(--mid) var(--ease);
 }
 .tray__title { margin: 0 6px 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
@@ -505,17 +505,14 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .tray__msg { margin: 10px 8px; font-size: 14px; color: var(--ink-3); }
 .tray__note { margin: 4px 8px 0; font-size: 12px; color: var(--ink-3); }
 .tray__close {
-  position: absolute;
-  top: 8px; right: 4px;
-  height: 30px; padding: 0 12px;
+  flex: none;
+  height: 26px; padding: 0 12px;
   border-radius: var(--r-pill);
   background: var(--paper);
   color: var(--ink-2);
   font-size: 12px; font-weight: 700; white-space: nowrap;
-  line-height: 1;
-  display: grid; place-items: center;
   box-shadow: var(--shadow-sm);
-  transition: background var(--fast), color var(--fast);
+  transition: background var(--fast), color var(--fast), transform var(--fast) var(--ease);
 }
 .tray__close:hover { color: var(--ink); background: var(--hover); }
 
@@ -989,9 +986,10 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .popup__star:hover { color: var(--ink); background: var(--surface); transform: scale(1.1); }
 .popup__star svg { width: 22px; height: 22px; }
 .popup__star.is-on { color: #e0a100; }
-.tray__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 6px 6px; min-height: 24px; }
+.tray__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 6px 6px; min-height: 26px; }
+.tray__head .tray__title { margin-right: auto; }
 .tray__favs {
-  margin-left: auto;
+  flex: none;
   height: 26px; padding: 0 10px; border-radius: var(--r-pill);
   font-size: 12px; font-weight: 700; color: var(--ink-2);
   background: var(--surface); box-shadow: var(--shadow-sm);
