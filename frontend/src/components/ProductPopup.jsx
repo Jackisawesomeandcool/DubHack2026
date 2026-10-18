@@ -70,6 +70,7 @@ export default function ProductPopup({ item, anchor, onClose, onRemove, favorite
           </button>
         )}
       </div>
+      <div className="popup__foot">
       {item.url && (
         <a className="popup__link" href={item.url} target="_blank" rel="noopener noreferrer">
           view on {host(item.url)} ↗
@@ -89,6 +90,7 @@ export default function ProductPopup({ item, anchor, onClose, onRemove, favorite
           </svg>
         </button>
       )}
+      </div>
     </div>
   );
 }

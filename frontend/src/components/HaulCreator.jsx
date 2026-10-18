@@ -36,11 +36,8 @@ export default function HaulCreator() {
   const [favMode, setFavMode] = useState(false);
   const favoritesRef = useRef(favorites);
   favoritesRef.current = favorites;
-  const favoritesFor = (item) => {
-    const others = favorites.filter((f) => !item || !sameProduct(f, item));
-    const same = item ? others.filter((f) => f.category === item.category) : [];
-    return same.length ? same : others;
-  };
+  // Everything starred, as is: no category filter, nothing hidden.
+  const favoritesFor = (item) => favorites.filter((f) => !item || !sameProduct(f, item));
   function toggleFav(item) {
     const next = toggleFavorite(favoritesRef.current, item);
     setFavorites(next);
@@ -96,7 +93,13 @@ export default function HaulCreator() {
   // Click the error message to try loading again.
   const retry = () => !loadingFit && fit.items.length === 0 && loadRandom(current);
 
+  // Any typing in the finder flips the tray back to suggestions.
+  function onTyping() {
+    if (favMode) toggleFavMode();
+  }
+
   async function find(prompt) {
+    if (favMode) toggleFavMode();
     const id = nextId.current++;
     setHistory((prev) => [{ id, prompt, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
     setActiveId(id);
@@ -121,7 +124,7 @@ export default function HaulCreator() {
 
   async function beginSwap(item) {
     revertSwap(swapRef.current);
-    const favs = favoritesFor(item).filter((a) => !fit.items.some((b) => b.uid !== item.uid && sameProduct(b, a)));
+    const favs = favoritesFor(item);
     const session = { uid: item.uid, original: item, alts: favMode ? favs : [], found: [], index: -1, loading: !favMode, error: '' };
     setSwap(session);
     setActiveId(null);
@@ -145,8 +148,7 @@ export default function HaulCreator() {
     const s = swapRef.current;
     if (s) {
       revertSwap(s);
-      const favs = favoritesFor(s.original).filter((a) => !fit.items.some((b) => b.uid !== s.uid && sameProduct(b, a)));
-      setSwap({ ...s, alts: next ? favs : s.found, index: -1, error: next ? '' : s.error });
+      setSwap({ ...s, alts: next ? favoritesFor(s.original) : s.found, index: -1, error: next ? '' : s.error });
     }
   }
 
@@ -240,7 +242,7 @@ export default function HaulCreator() {
       <Backdrop index={current} />
       <header className="bar">
         <div className="bar__right">
-          <HaulTotal total={total} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
+          <HaulTotal total={total} resetKey={`${current}:${loadingFit}`} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
         </div>
       </header>
@@ -292,7 +294,7 @@ export default function HaulCreator() {
             onToggleFavMode={toggleFavMode}
           />
         )}
-        <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
+        <PromptBar onSubmit={find} onTyping={onTyping} busy={Boolean(active?.loading)} />
       </footer>
     </main>
   );

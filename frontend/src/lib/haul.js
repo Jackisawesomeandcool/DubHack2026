@@ -70,7 +70,6 @@ export function addItem(fit, item) {
 // Swap: the new piece takes the selected piece's spot (and id, so the
 // selection and position carry over without a flicker).
 export function swapItem(fit, oldItem, item) {
-  if (fit.items.some((i) => i.uid !== oldItem.uid && sameProduct(i, item))) return fit; // already on the board: nothing to swap
   return { items: fit.items.map((i) => (i.uid === oldItem.uid ? { ...item, uid: oldItem.uid, x: oldItem.x, y: oldItem.y } : i)) };
 }
 

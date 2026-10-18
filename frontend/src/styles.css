@@ -584,16 +584,16 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .popup {
   position: fixed;
   z-index: 100;
-  min-width: 200px;
-  max-width: 270px;
-  padding: 14px 16px;
+  min-width: 260px;
+  max-width: 340px;
+  padding: 18px 20px 16px;
   background: var(--paper);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-md);
   animation: popIn 200ms var(--ease);
   transform-origin: center left;
 }
-.popup__name { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.popup__name { font-size: 16px; font-weight: 700; line-height: 1.3; padding-right: 4px; }
 .popup__brand { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
 .popup__row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .popup__stock {
@@ -894,15 +894,17 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .share__go:disabled { opacity: 0.4; cursor: default; }
 
 /* favorites */
-.popup { padding-bottom: 14px; }
+.popup__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.popup__foot .popup__link { margin-top: 0; }
 .popup__star {
-  position: absolute; right: 10px; bottom: 10px;
-  width: 30px; height: 30px; border-radius: 50%;
+  flex: none;
+  width: 36px; height: 36px; border-radius: 50%;
   display: grid; place-items: center;
   color: var(--ink-3);
   transition: color var(--fast), transform var(--fast) var(--ease), background var(--fast);
 }
 .popup__star:hover { color: var(--ink); background: var(--surface); transform: scale(1.1); }
+.popup__star svg { width: 22px; height: 22px; }
 .popup__star.is-on { color: #e0a100; }
 .tray__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 6px 6px; min-height: 24px; }
 .tray__favs {
