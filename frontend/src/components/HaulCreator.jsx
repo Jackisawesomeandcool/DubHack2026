@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import FitSelector from './FitSelector.jsx';
 import HaulTotal from './HaulTotal.jsx';
 import ShareControl from './ShareControl.jsx';
+import ThemeControl from './ThemeControl.jsx';
 import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
@@ -283,6 +284,7 @@ export default function HaulCreator() {
       <header className="bar">
         <div className="bar__right">
           <HaulTotal total={total} resetKey={`${current}:${loadingFit}`} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
+          <ThemeControl />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
           <AccountMenu />
         </div>

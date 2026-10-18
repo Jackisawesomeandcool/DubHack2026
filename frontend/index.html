@@ -7,6 +7,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script>
+      /* apply the saved color theme before first paint so there is no flash */
+      try { var t = localStorage.getItem('haul.theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+    </script>
     <meta name="theme-color" content="#eceae6" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
