@@ -133,7 +133,7 @@ def take(models: bool = False) -> dict:
     """Random fit: a pre-built AI-picked fit from the pool when one is ready,
     else a random one-piece-per-category fit from the catalog (instant), else
     build one now."""
-    fit = catalog.random_fit(models)   # instant, 4–12 random pieces from the catalog
+    fit = catalog.random_fit(models)   # instant, 6–7 random pieces from the catalog
     if fit is None:
         with _lock:
             pool = _read()

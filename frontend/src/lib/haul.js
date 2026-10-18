@@ -100,3 +100,23 @@ export function exportFits(fits) {
     .filter((f) => f.items.length)
     .map((f) => ({ items: f.items.map(({ uid: _uid, ...rest }) => rest) }));
 }
+
+// Uncluttered layout for a freshly generated fit: a 3x3 grid of cells, each
+// piece goes to the free cell nearest its usual spot (headwear up top, shoes
+// at the bottom...), with a little jitter and a smaller size so nothing overlaps.
+const CELLS = [20, 50, 80].flatMap((x) => [24, 52, 80].map((y) => ({ x, y })));
+const ORDER = ['outerwear', 'top', 'bottom', 'shoes', 'headwear', 'bag', 'accessory'];
+
+export function spreadPositions(items) {
+  const uniq = [];
+  for (const raw of items) if (!uniq.some((p) => sameProduct(p, raw))) uniq.push({ ...raw, uid: raw.uid || uid() });
+  const free = CELLS.slice();
+  const rank = (i) => { const n = ORDER.indexOf(i.category); return n < 0 ? ORDER.length : n; };
+  return [...uniq].sort((a, b) => rank(a) - rank(b)).map((item) => {
+    const home = placeFor(item.category);
+    free.sort((a, b) => Math.hypot(a.x - home.x, a.y - home.y) - Math.hypot(b.x - home.x, b.y - home.y));
+    const cell = free.shift() || { x: 50, y: 50 };
+    const jit = () => (Math.random() - 0.5) * 6;
+    return { ...item, x: cell.x + jit(), y: cell.y + jit(), s: 0.8 };
+  });
+}

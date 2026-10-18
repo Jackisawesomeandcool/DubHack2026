@@ -18,7 +18,7 @@ export default function FashionItem({ item, zIndex, selected, draggable, swapUi,
 
   // Category width, shrunk for tall-and-thin photos (a bottle, a sock) so they
   // take up a sensible area instead of towering over the clothes.
-  const w = placeFor(item.category).w * (aspect > 1.3 ? Math.max(0.45, 1.3 / aspect) : 1);
+  const w = placeFor(item.category).w * (item.s || 1) * (aspect > 1.3 ? Math.max(0.45, 1.3 / aspect) : 1);
 
   function isOutside(e, rect) {
     return e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;

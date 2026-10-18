@@ -12,7 +12,7 @@ import Backdrop from './Backdrop.jsx';
 import AccountMenu from './AccountMenu.jsx';
 import { health, loadState, randomFit, saveState, saveStateBeacon, seen, suggest } from '../lib/api.js';
 import { loadUser, token } from '../lib/session.js';
-import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, exportFits, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
+import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, exportFits, fitTotal, moveItem, onBoard, removeItem, sameProduct, spreadPositions, swapItem, withPositions } from '../lib/haul.js';
 import { isFavorite, loadFavorites, saveFavorites, toggleFavorite } from '../lib/favorites.js';
 
 const MAX_HISTORY = 7;
@@ -92,7 +92,7 @@ export default function HaulCreator() {
     setFitError('');
     try {
       const { items } = await randomFit(modelsRef.current);
-      update(index, (f) => ({ ...f, items: withPositions(items) }));
+      update(index, (f) => ({ ...f, items: spreadPositions(items) }));
       seen(items);
     } catch (err) {
       setFitError(`couldn’t load a fit — ${err.message || 'try again'}`);

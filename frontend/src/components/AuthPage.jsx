@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import FashionCanvas from './FashionCanvas.jsx';
 import { randomFit } from '../lib/api.js';
-import { withPositions } from '../lib/haul.js';
+import { spreadPositions } from '../lib/haul.js';
 import { USERNAME_RE, cleanUsername, continueAsGuest, go, loadUser, logIn, signUp } from '../lib/session.js';
 
 const COPY = {
@@ -10,7 +10,7 @@ const COPY = {
     sub: 'Log in to pick up your fits.',
     submit: 'Log in',
     headline: 'Build outfits from real stores.',
-    tagline: 'Mix pieces, swap in dupes, share the fit.',
+    tagline: 'Mix pieces and share the fit.',
   },
   signup: {
     title: 'Create your account',
@@ -42,7 +42,7 @@ export default function AuthPage({ mode = 'login' }) {
   useEffect(() => {
     let alive = true;
     randomFit()
-      .then(({ items }) => alive && setPreview(withPositions(items)))
+      .then(({ items }) => alive && setPreview(spreadPositions(items)))
       .catch(() => {})
       .finally(() => alive && setPreviewLoading(false));
     return () => { alive = false; };
@@ -148,7 +148,7 @@ export default function AuthPage({ mode = 'login' }) {
             <p className="auth__switch">Already have an account? <a href="/login">Log in</a></p>
           ) : (
             <>
-              <p className="auth__switch">New to Haul? <a href="/signup">Create an account</a></p>
+              <p className="auth__switch">New to FitCheck? <a href="/signup">Create an account</a></p>
               <p className="auth__guest">Just looking? <a href="/" onClick={guest}>Continue as guest</a></p>
             </>
           )}

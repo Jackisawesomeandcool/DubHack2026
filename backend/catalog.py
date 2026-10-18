@@ -22,7 +22,7 @@ from intent import Intent
 DB_PATH = config.DATA_DIR / "catalog.sqlite"
 RESULT_TTL = 60 * 60          # cached search results stay valid this long
 MIN_FOR_RANDOM = 12
-RANDOM_FIT_MIN, RANDOM_FIT_MAX = 4, 12   # pieces in a random fit           # items needed before random fits come from the catalog
+RANDOM_FIT_MIN, RANDOM_FIT_MAX = 6, 7   # pieces in a random fit — few enough to sit uncluttered on the board
 
 _lock = threading.RLock()
 _conn: sqlite3.Connection | None = None
@@ -379,7 +379,7 @@ def random_fit(models: bool) -> dict | None:
         by_cat.setdefault(r["category"], []).append(r)
     if not all(c in by_cat for c in ("top", "bottom", "shoes")):
         return None
-    # A random fit has 4–12 pieces: always a top, bottom and shoes, then the rest
+    # A random fit has 6–7 pieces: always a top, bottom and shoes, then the rest
     # drawn from every category (extras can repeat a category — two tops, a
     # second pair of shoes), never the same product twice.
     n = random.randint(RANDOM_FIT_MIN, RANDOM_FIT_MAX)
