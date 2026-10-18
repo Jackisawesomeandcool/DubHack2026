@@ -17,6 +17,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import auth
 import catalog
 import config
 import cutouts
@@ -56,7 +57,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def _read_json(self) -> dict | None:
         try:
@@ -117,6 +118,9 @@ class Handler(BaseHTTPRequestHandler):
                 return None
             return self._stream_suggest(prompt, category, exclude, models)
 
+        if self.path.startswith("/api/auth/"):
+            return self._auth_post()
+
         if self.path == "/api/seen":
             # Light stock re-check for products shown / placed on the board.
             body = self._read_json() or {}
@@ -133,7 +137,33 @@ class Handler(BaseHTTPRequestHandler):
 
         self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
+    def _token(self) -> str | None:
+        h = self.headers.get("Authorization", "")
+        return h[7:].strip() if h.startswith("Bearer ") else None
+
+    def _auth_post(self):
+        body = self._read_json() or {}
+        try:
+            if self.path == "/api/auth/signup":
+                user, token = auth.signup(body.get("firstName", ""), body.get("username", ""), body.get("email", ""), body.get("password", ""))
+                print(f"[auth] new account @{user['username']} (users: {auth.count()})", file=sys.stderr)
+                return self._json(HTTPStatus.OK, {"user": user, "token": token})
+            if self.path == "/api/auth/login":
+                user, token = auth.login(body.get("identifier", ""), body.get("password", ""))
+                return self._json(HTTPStatus.OK, {"user": user, "token": token})
+            if self.path == "/api/auth/logout":
+                auth.logout(self._token())
+                return self._json(HTTPStatus.OK, {"ok": True})
+        except auth.AuthError as err:
+            return self._json(HTTPStatus.BAD_REQUEST, {"error": str(err)})
+        return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+
     def do_GET(self):
+        if self.path == "/api/auth/me":
+            user = auth.user_for(self._token())
+            if not user:
+                return self._json(HTTPStatus.UNAUTHORIZED, {"error": "not signed in"})
+            return self._json(HTTPStatus.OK, {"user": user})
         if self.path == "/api/health":
             return self._json(HTTPStatus.OK, {
                 "key": True,
@@ -141,6 +171,7 @@ class Handler(BaseHTTPRequestHandler):
                 "provider": llm.provider(),
                 "cutouts": cutouts.available(),
                 "catalog": catalog.count(),
+                "users": auth.count(),
             })
         if self.path.split("?")[0] == "/api/random-fit":
             if not _require_key(self):

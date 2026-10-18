@@ -44,15 +44,15 @@ export default function AccountMenu() {
             {user?.username && <span>@{user.username}</span>}
           </div>
           {user ? (
-            <button type="button" role="menuitem" className="account__item" onClick={() => { logOut(); go('/login'); }}>
+            <button type="button" role="menuitem" className="account__item" onClick={() => logOut().then(() => go('/login'))}>
               Log out
             </button>
           ) : (
             <>
-              <button type="button" role="menuitem" className="account__item" onClick={() => { logOut(); go('/signup'); }}>
+              <button type="button" role="menuitem" className="account__item" onClick={() => logOut().then(() => go('/signup'))}>
                 Create an account
               </button>
-              <button type="button" role="menuitem" className="account__item" onClick={() => { logOut(); go('/login'); }}>
+              <button type="button" role="menuitem" className="account__item" onClick={() => logOut().then(() => go('/login'))}>
                 Log in
               </button>
             </>
