@@ -25,7 +25,6 @@ import re
 import sys
 import time
 import urllib.parse
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 if "--ai" not in sys.argv:
@@ -34,10 +33,8 @@ if "--ai" not in sys.argv:
         os.environ[_k] = ""
 
 import catalog
-import config
 import cutouts
 import images
-import quality
 from products import CATEGORIES
 
 STUSSY_FEED = "https://www.stussy.com/products.json?limit=250&page={page}"
@@ -217,25 +214,16 @@ def process(item: dict) -> bool:
     cands = item["candidates"]
     with ThreadPoolExecutor(max_workers=6) as pool:
         blobs = list(pool.map(_download, cands))
-    # Try photos best-first: skin-tone check picks the order, then the finished cutout is run
-    # through the local person detector (quality.py) and the next photo is tried if a model slipped through.
+    # Best-first: the skin-tone check picks the order; best_cutout() then makes sure no person shows,
+    # trying the other photos and finally cutting just the garment out of a model shot.
     first = cutouts.pick(blobs, False)
     order = ([first] if first >= 0 else []) + [i for i, b in enumerate(blobs) if b and i != first]
-    path, flagged = None, 0
-    for idx in order[:4]:                 # at most 4 cutout attempts per product
-        if not blobs[idx]:
-            continue
-        cand = cutouts.make_cutout(cands[idx], blobs[idx], allow_flat=True)
-        if not cand:
-            continue
-        ok, _ = quality.check_cutout(config.DATA_DIR / "cutouts" / Path(cand).name)
-        if ok:
-            path = cand
-            break
-        flagged += 1
+    path, how = cutouts.best_cutout(cands, blobs, item["category"], item["name"], order)
     if not path:
-        print(f"  no clean product-only photo for {item['name']} ({flagged} cutouts showed a person)", file=sys.stderr)
+        print(f"  skipped {item['name']}: {how}", file=sys.stderr)
         return False
+    if how != "product photo":
+        print(f"  {item['name']}: {how}")
     row = {"name": item["name"], "brand": item["brand"], "price": item["price"], "url": item["url"],
            "image": path, "stock": "in_stock", "category": item["category"]}
     catalog.upsert([row], False, query=f"{item['name']} {item['tags']}", source=item["brand"].lower())

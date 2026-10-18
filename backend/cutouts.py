@@ -204,6 +204,8 @@ def resolve(item: dict, allow_models: bool = False) -> None:
             _save_cache()
 
     path = make_cutout(chosen, raw, allow_flat=True)
+    if path and not allow_models:
+        path = scrub_person(path, chosen, raw, item.get("category"), item.get("name") or "")
     item["image"] = path or ""
     for k in ("image_product", "image_model"):
         item.pop(k, None)
@@ -213,3 +215,85 @@ def resolve_all(items: list[dict], allow_models: bool = False) -> None:
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=min(6, max(1, len(items)))) as pool:
         list(pool.map(lambda it: resolve(it, allow_models), items))
+
+
+# ---------------------------------------------------------------- no people in the shop
+# A shopping page looks much worse with a human model in every tile, but the garment on that
+# model is still a good product. So a cutout that shows a person is replaced by a cut of just
+# the clothes (garment.py); if that cannot be made cleanly the item is dropped / next photo tried.
+
+_MULTI = ("pack", "set", "pair", "2-pack", "3-pack", "bundle", "collection")
+
+
+def _multi_ok(name: str) -> bool:
+    n = (name or "").lower()
+    return any(w in n for w in _MULTI)
+
+
+def _shows_person(path: str, category: str | None) -> bool:
+    try:
+        import quality
+        ok, _ = quality.check_cutout(CUTOUT_DIR / path.rsplit("/", 1)[-1], category)
+        return not ok
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def save_garment(url: str, img) -> str:
+    """Store a garment-only RGBA image; served path. Cached under 'garment:<source url>'."""
+    name = hashlib.sha1(("garment:" + url).encode("utf-8")).hexdigest()[:16] + ".png"
+    CUTOUT_DIR.mkdir(parents=True, exist_ok=True)
+    img.save(CUTOUT_DIR / name, "PNG", optimize=True)
+    with _lock:
+        _load_cache()["garment:" + url] = {"file": name, "tier": "garment"}
+        _save_cache()
+    return f"/cutouts/{name}"
+
+
+def garment_from_photos(photos: list, url: str, category: str | None, name: str = "") -> tuple[str | None, str]:
+    """Cut just the clothes from the best of several raw photos. (served path | None, reason)."""
+    import garment
+    if not garment.can_handle(category):
+        return None, "this kind of item can't be separated from a model"
+    img, info, _ = garment.best_extract(photos, category, multi_ok=_multi_ok(name))
+    if img is None:
+        return None, info.get("reason", "crop failed")
+    return save_garment(url, img), "ok"
+
+
+def scrub_person(path: str, source_url: str, raw: bytes | None, category: str | None, name: str = "") -> str | None:
+    """Return `path` if it shows no person, a garment-only cut if it does, or None to drop the item."""
+    if not _shows_person(path, category):
+        return path
+    try:
+        raw = raw or _download(source_url)
+    except Exception:  # noqa: BLE001
+        return None
+    out, why = garment_from_photos([raw], source_url, category, name)
+    if not out:
+        print(f"[cutouts] dropped '{name[:50]}': person in photo, {why}", file=sys.stderr)
+    return out
+
+
+def best_cutout(urls: list[str], blobs: list, category: str | None, name: str = "", order: list[int] | None = None) -> tuple[str | None, str]:
+    """Cutout for one listing that never shows a person. (served path | None, how or why).
+
+    1. try the photos best-first (at most 4) and take the first whose cutout shows no person;
+    2. otherwise cut just the garment out of the best on-model photo (top/outerwear/bottom);
+    3. otherwise None."""
+    idxs = order if order is not None else list(range(len(blobs)))
+    idxs = [i for i in idxs if blobs[i]]
+    shown = 0
+    for i in idxs[:4]:
+        p = make_cutout(urls[i], blobs[i], allow_flat=True)
+        if not p:
+            continue
+        if not _shows_person(p, category):
+            return p, "product photo"
+        shown += 1
+    if not idxs:
+        return None, "no photos downloaded"
+    out, why = garment_from_photos([blobs[i] for i in idxs[:5]], urls[idxs[0]], category, name)
+    if out:
+        return out, "cropped from model photo"
+    return None, f"{shown} photos showed a person; {why}"
