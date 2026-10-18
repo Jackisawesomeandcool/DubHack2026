@@ -23,10 +23,12 @@ import json
 import re
 import secrets
 import sqlite3
+import sys
 import threading
 import time
 
 import config
+import kv
 
 DB_PATH = config.DATA_DIR / "users.sqlite"
 USERNAME_RE = re.compile(r"^[a-z0-9_.]{3,20}$")
@@ -40,6 +42,16 @@ _conn: sqlite3.Connection | None = None
 
 class AuthError(Exception):
     """A user-facing problem (bad input, wrong password, taken username)."""
+
+
+def _remote() -> bool:
+    """True when accounts live in Upstash Redis (hosted). Hosted without storage = accounts unavailable,
+    never a silent per-instance database that would forget everyone."""
+    if kv.enabled():
+        return True
+    if config.HOSTED:
+        raise AuthError("Accounts aren't available on this deployment yet (storage not connected).")
+    return False
 
 
 def _db() -> sqlite3.Connection:
@@ -103,6 +115,13 @@ def signup(first_name: str, username: str, email: str, password: str) -> tuple[d
         raise AuthError("Enter a valid email.")
     if len(password or "") < MIN_PASSWORD:
         raise AuthError(f"Password needs at least {MIN_PASSWORD} characters.")
+    if _remote():
+        import auth_kv
+        try:
+            return auth_kv.signup(first_name, username, email, password)
+        except kv.KVError as err:
+            print(f"[auth] storage: {err}", file=sys.stderr)
+            raise AuthError("Accounts are unavailable for a moment — try again shortly.") from err
     salt = secrets.token_bytes(16)
     now = time.time()
     with _lock:
@@ -126,6 +145,13 @@ def login(identifier: str, password: str) -> tuple[dict, str]:
     ident = (identifier or "").strip().lstrip("@").lower()
     if not ident or not password:
         raise AuthError("Enter your email or username and password.")
+    if _remote():
+        import auth_kv
+        try:
+            return auth_kv.login(ident, password)
+        except kv.KVError as err:
+            print(f"[auth] storage: {err}", file=sys.stderr)
+            raise AuthError("Accounts are unavailable for a moment — try again shortly.") from err
     with _lock:
         db = _db()
         row = db.execute("SELECT * FROM users WHERE email=? OR username=?", (ident, ident)).fetchone()
@@ -149,6 +175,15 @@ def user_for(token: str | None) -> dict | None:
     """The signed-in user for a session token, or None."""
     if not token:
         return None
+    if kv.enabled() or config.HOSTED:
+        if not kv.enabled():
+            return None
+        import auth_kv
+        try:
+            return auth_kv.user_for(token)
+        except kv.KVError as err:
+            print(f"[auth] storage: {err}", file=sys.stderr)
+            return None
     now = time.time()
     with _lock:
         db = _db()
@@ -167,18 +202,35 @@ def user_for(token: str | None) -> dict | None:
 def logout(token: str | None) -> None:
     if not token:
         return
+    if kv.enabled() or config.HOSTED:
+        if kv.enabled():
+            import auth_kv
+            try:
+                auth_kv.logout(token)
+            except kv.KVError:
+                pass
+        return
     with _lock:
         _db().execute("DELETE FROM sessions WHERE token=?", (token,))
         _db().commit()
 
 
 def count() -> int:
+    if kv.enabled() or config.HOSTED:
+        if not kv.enabled():
+            return 0
+        import auth_kv
+        try:
+            return auth_kv.count()
+        except kv.KVError:
+            return 0
     with _lock:
         return _db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
 
 
 # ---------------------------------------------------------------- per-user state
 MAX_STATE_BYTES = 2_000_000
+MAX_STATE_BYTES_REMOTE = 900_000   # Upstash's free plan caps a request at 1 MB
 
 
 def _loads(text: str) -> list:
@@ -190,6 +242,12 @@ def _loads(text: str) -> list:
 
 
 def get_state(user_id: int) -> dict:
+    if _remote():
+        import auth_kv
+        try:
+            return auth_kv.get_state(user_id)
+        except kv.KVError as err:
+            raise AuthError("Couldn't load your saved data right now.") from err
     with _lock:
         row = _db().execute("SELECT favorites, hauls, history, updated_at FROM state WHERE user_id=?", (user_id,)).fetchone()
     if not row:
@@ -204,8 +262,14 @@ def set_state(user_id: int, favorites, hauls, history=None) -> dict:
     hauls = [h for h in (hauls or []) if isinstance(h, dict) and isinstance(h.get("items"), list)][:5]
     history = [h for h in (history or []) if isinstance(h, dict) and isinstance(h.get("prompt"), str)][:7]
     fav_s, haul_s, hist_s = json.dumps(favorites), json.dumps(hauls), json.dumps(history)
-    if len(fav_s) + len(haul_s) + len(hist_s) > MAX_STATE_BYTES:
+    if len(fav_s) + len(haul_s) + len(hist_s) > (MAX_STATE_BYTES if not _remote() else MAX_STATE_BYTES_REMOTE):
         raise AuthError("Too much data to save.")
+    if _remote():
+        import auth_kv
+        try:
+            return auth_kv.set_state(user_id, favorites, hauls, history)
+        except kv.KVError as err:
+            raise AuthError("Couldn't save right now — try again in a moment.") from err
     now = time.time()
     with _lock:
         _db().execute(

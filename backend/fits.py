@@ -113,6 +113,8 @@ def _refill() -> None:
 def ensure_pool() -> None:
     """Kick off background building if the pool is short."""
     global _refilling
+    if config.HOSTED:            # no background threads on serverless: random fits come straight from the catalog
+        return
     with _lock:
         if _refilling or not _short_modes(_read()):
             return

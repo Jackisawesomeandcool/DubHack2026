@@ -13,6 +13,7 @@ import json
 import mimetypes
 import re
 import sys
+import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -141,8 +142,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/seen":
             # Light stock re-check for products shown / placed on the board.
             body = self._read_json() or {}
-            for url in [u for u in body.get("urls", []) if isinstance(u, str)][:20]:
-                stock.recheck(url)
+            if not config.HOSTED:        # hosted: no background re-checks, stock comes from the dataset
+                for url in [u for u in body.get("urls", []) if isinstance(u, str)][:20]:
+                    stock.recheck(url)
             return self._json(HTTPStatus.OK, {"ok": True})
 
         if self.path == "/api/share":
@@ -150,7 +152,10 @@ class Handler(BaseHTTPRequestHandler):
             fits = store.sanitize_fits((body or {}).get("fits"))
             if not fits:
                 return self._json(HTTPStatus.BAD_REQUEST, {"error": "no fits to share"})
-            return self._json(HTTPStatus.OK, {"id": store.save(fits)})
+            try:
+                return self._json(HTTPStatus.OK, {"id": store.save(fits)})
+            except store.StoreUnavailable as err:
+                return self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": str(err)})
 
         self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
@@ -193,7 +198,8 @@ class Handler(BaseHTTPRequestHandler):
                 "provider": llm.provider(),
                 "cutouts": cutouts.available(),
                 "catalog": catalog.count(),
-                "users": auth.count(),
+                "users": 0 if config.HOSTED else auth.count(),
+                "hosted": config.HOSTED,
             })
         if self.path.split("?")[0] == "/api/random-fit":
             if not _require_key(self):
@@ -244,6 +250,22 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+
+_boot_lock = threading.Lock()
+_booted = False
+
+
+def boot_hosted() -> None:
+    """Serverless cold start: build the catalog (in /tmp) from backend/dataset/catalog.json. No threads, no images."""
+    global _booted
+    with _boot_lock:
+        if _booted:
+            return
+        import dataset
+        stats = dataset.load(quiet=True, images=False)
+        print(f"[hosted] catalog ready: {catalog.count()} products ({stats['added']} loaded)", file=sys.stderr)
+        _booted = True
 
 
 def quality_sweep() -> None:

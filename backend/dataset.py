@@ -147,13 +147,16 @@ def export(quiet: bool = False) -> dict:
 
 
 # ---------------------------------------------------------------- load
-def load(quiet: bool = False) -> dict:
-    """dataset/ -> local catalog. Cheap enough to run on every server start."""
+def load(quiet: bool = False, images: bool = True) -> dict:
+    """dataset/ -> local catalog. Cheap enough to run on every server start.
+
+    images=False (hosted mode): the PNGs are served as static files, so they are neither checked nor copied."""
     stats = {"added": 0, "updated": 0, "removed": 0, "images": 0}
     if not ITEMS.exists():
         return stats
     items, removed = _read_items(), _read_removed()
-    LOCAL_IMG.mkdir(parents=True, exist_ok=True)
+    if images:
+        LOCAL_IMG.mkdir(parents=True, exist_ok=True)
     changed = False
     with catalog._lock:
         db = catalog._db()
@@ -171,8 +174,8 @@ def load(quiet: bool = False) -> dict:
             paths = {}
             for k in ("cutout_p", "cutout_m"):
                 n = it.get(k)
-                if n and (IMG / n).exists():
-                    if not (LOCAL_IMG / n).exists():
+                if n and (not images or (IMG / n).exists()):
+                    if images and not (LOCAL_IMG / n).exists():
                         shutil.copy2(IMG / n, LOCAL_IMG / n)
                         stats["images"] += 1
                     paths[k] = "/cutouts/" + n

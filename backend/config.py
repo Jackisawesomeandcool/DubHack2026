@@ -52,5 +52,10 @@ CUTOUT_PROVIDER = os.environ.get("CUTOUT_PROVIDER", "").strip().lower() or (
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8000"))
 
-DATA_DIR = BACKEND_DIR / "data"
+# Hosted mode (Vercel): the filesystem is read-only and per-instance, so the catalog is rebuilt in /tmp
+# from backend/dataset/ on cold start, product images are static files, nothing runs in the background,
+# and accounts / shared hauls live in Upstash Redis (see kv.py and docs/DEPLOY.md).
+HOSTED = os.environ.get("HAUL_HOSTED", "").strip() == "1" or bool(os.environ.get("VERCEL"))
+
+DATA_DIR = Path(os.environ.get("HAUL_DATA_DIR", "/tmp/haul-data")) if HOSTED else BACKEND_DIR / "data"
 FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"

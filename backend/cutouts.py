@@ -34,6 +34,8 @@ _cache_path = config.DATA_DIR / "cutouts.json"
 _cache: dict[str, dict] | None = None
 
 def available() -> bool:
+    if config.HOSTED:            # hosted: cutouts are pre-made static files, nothing to generate (no Pillow needed)
+        return True
     return bgremove.ready()
 
 

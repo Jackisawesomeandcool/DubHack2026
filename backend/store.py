@@ -5,6 +5,7 @@ import secrets
 import threading
 
 import config
+import kv
 from products import normalize_list
 
 MAX_FITS = 5
@@ -39,7 +40,22 @@ def sanitize_fits(fits) -> list[dict]:
     return clean
 
 
+class StoreUnavailable(RuntimeError):
+    """Sharing needs storage that isn't connected (hosted without Upstash) or isn't reachable."""
+
+
 def save(fits: list[dict]) -> str:
+    if kv.enabled() or config.HOSTED:
+        if not kv.enabled():
+            raise StoreUnavailable("Sharing isn't available on this deployment yet (storage not connected).")
+        try:
+            for _ in range(5):
+                share_id = secrets.token_urlsafe(6)
+                if kv.set_json(f"haul:share:{share_id}", {"fits": fits}, "NX") is not None:
+                    return share_id
+        except kv.KVError as err:
+            raise StoreUnavailable("Couldn't create a share link right now.") from err
+        raise StoreUnavailable("Couldn't create a share link right now.")
     with _lock:
         data = _read()
         share_id = secrets.token_urlsafe(6)
@@ -51,5 +67,12 @@ def save(fits: list[dict]) -> str:
 
 
 def load(share_id: str) -> dict | None:
+    if kv.enabled() or config.HOSTED:
+        if not kv.enabled():
+            return None
+        try:
+            return kv.get_json(f"haul:share:{share_id}")
+        except kv.KVError:
+            return None
     with _lock:
         return _read().get(share_id)
