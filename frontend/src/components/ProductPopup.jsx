@@ -10,24 +10,37 @@ function host(url) {
 // Small floating card: name, brand, stock, link to the listing (+ remove when
 // editing). Positioned next to the clicked item and clamped inside the viewport.
 // Clicks in the dock (options / finder) keep it open so a swap can be picked.
-export default function ProductPopup({ item, anchor, onClose, onRemove, favorite = null, onFavorite }) {
+export default function ProductPopup({ item, anchor, onClose, onRemove, favorite = null, onFavorite, boundsRef = null }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
 
   useLayoutEffect(() => {
-    if (!anchor || !ref.current) return;
-    const a = anchor.getBoundingClientRect();
-    const p = ref.current.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
+    if (!anchor || !ref.current) return undefined;
+    const place = () => {
+      if (!anchor || !ref.current) return;
+      const a = anchor.getBoundingClientRect();
+      const p = ref.current.getBoundingClientRect();
+      // Stay inside the board (so the card never covers the tray or header);
+      // fall back to the window when there is no board, e.g. on the guest page.
+      const b = boundsRef?.current?.getBoundingClientRect();
+      const minX = b ? b.left + MARGIN : MARGIN, maxX = b ? b.right - MARGIN : window.innerWidth - MARGIN;
+      const minY = b ? b.top + MARGIN : MARGIN, maxY = b ? b.bottom - MARGIN : window.innerHeight - MARGIN;
 
-    let left = a.right + GAP;
-    if (left + p.width > vw - MARGIN) left = a.left - p.width - GAP;
-    if (left < MARGIN) left = Math.min(Math.max(MARGIN, a.left + a.width / 2 - p.width / 2), vw - p.width - MARGIN);
+      let left = a.right + GAP;
+      if (left + p.width > maxX) left = a.left - p.width - GAP;
+      if (left < minX) left = Math.min(Math.max(minX, a.left + a.width / 2 - p.width / 2), maxX - p.width);
 
-    let top = a.top + a.height / 2 - p.height / 2;
-    top = Math.min(Math.max(MARGIN, top), vh - p.height - MARGIN);
-    setPos({ left, top });
-  }, [anchor, item]);
+      let top = a.top + a.height / 2 - p.height / 2;
+      top = Math.min(Math.max(minY, top), maxY - p.height);
+      setPos({ left, top });
+    };
+    place();
+    // The board shrinks when the tray opens under it: follow it.
+    const ro = new ResizeObserver(place);
+    if (boundsRef?.current) ro.observe(boundsRef.current);
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [anchor, item, boundsRef]);
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
