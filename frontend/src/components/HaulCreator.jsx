@@ -7,6 +7,7 @@ import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
+import BrowseColumn from './BrowseColumn.jsx';
 import Backdrop from './Backdrop.jsx';
 import AccountMenu from './AccountMenu.jsx';
 import { health, loadState, randomFit, saveState, saveStateBeacon, seen, suggest } from '../lib/api.js';
@@ -89,10 +90,10 @@ export default function HaulCreator() {
     setFitError('');
     try {
       const { items } = await randomFit(modelsRef.current);
-      update(index, () => ({ items: withPositions(items) }));
+      update(index, (f) => ({ ...f, items: withPositions(items) }));
       seen(items);
     } catch (err) {
-      setFitError(`couldn’t load a haul — ${err.message || 'try again'}`);
+      setFitError(`couldn’t load a fit — ${err.message || 'try again'}`);
     } finally {
       setLoadingFit(false);
     }
@@ -113,7 +114,7 @@ export default function HaulCreator() {
           }
           const hauls = saved.hauls.filter((h) => h.items.length);
           if (hauls.length) {
-            setFits(hauls.map((h) => ({ items: withPositions(h.items) })));
+            setFits(hauls.map((h) => emptyFit(withPositions(h.items))));
             setCurrent(0);
             restored.current = true;
             return;
@@ -300,7 +301,7 @@ export default function HaulCreator() {
       <Backdrop index={current} />
       <header className="bar">
         <div className="bar__right">
-          <HaulTotal total={total} resetKey={`${current}:${loadingFit}`} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
+          <HaulTotal total={total} resetKey={`${fit.id}:${loadingFit}`} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
           <ThemeControl />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
           <AccountMenu />
@@ -329,6 +330,10 @@ export default function HaulCreator() {
           onDragOutChange={setDragOut}
           isFavorite={(item) => isFavorite(favorites, item)}
           onFavorite={toggleFav}
+        />
+        <BrowseColumn
+          swapMode={Boolean(swap)}
+          onPick={(item) => { if (swap) previewOption(item); else { seen([item]); update(current, (f) => addItem(f, item)); } }}
         />
       </div>
 

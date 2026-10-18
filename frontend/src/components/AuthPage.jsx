@@ -7,17 +7,17 @@ import { USERNAME_RE, cleanUsername, continueAsGuest, go, loadUser, logIn, signU
 const COPY = {
   login: {
     title: 'Welcome back',
-    sub: 'Log in to pick up your hauls.',
+    sub: 'Log in to pick up your fits.',
     submit: 'Log in',
     headline: 'Build outfits from real stores.',
-    tagline: 'Mix pieces, swap in dupes, share the haul.',
+    tagline: 'Mix pieces, swap in dupes, share the fit.',
   },
   signup: {
     title: 'Create your account',
     sub: 'It takes about a minute.',
     submit: 'Continue',
-    headline: 'Save your hauls. Share them in one link.',
-    tagline: 'Keep several hauls going at once and come back to them anytime.',
+    headline: 'Save your fits. Share them in one link.',
+    tagline: 'Keep several fits going at once and come back to them anytime.',
   },
 };
 
@@ -81,7 +81,7 @@ export default function AuthPage({ mode = 'login' }) {
   return (
     <main className="auth">
       <section className="auth__panel" aria-label="Haul preview">
-        <div className="auth__brand">Haul</div>
+        <div className="auth__brand">FitCheck</div>
         <div className="auth__board" aria-hidden="true">
           <FashionCanvas items={preview} fitKey="auth" loading={previewLoading} />
         </div>

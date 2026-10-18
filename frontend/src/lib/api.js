@@ -74,6 +74,10 @@ export function health() {
   return request('/api/health');
 }
 
+export function browse(n = 24) {
+  return request(`/api/browse?n=${n}`);
+}
+
 export function randomFit(models = false) {
   return request(`/api/random-fit${models ? '?models=1' : ''}`);
 }

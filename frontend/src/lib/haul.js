@@ -6,8 +6,12 @@ export const MAX_ITEMS = 10;
 let uidCounter = 1;
 const uid = () => `p${uidCounter++}`;
 
-export function emptyFit() {
-  return { items: [] };
+let fitCounter = 1;
+
+// Each fit carries a stable id so UI keyed to "which fit" (e.g. the total's
+// silent reset) survives deletes and reorders.
+export function emptyFit(items = []) {
+  return { id: `f${fitCounter++}`, items };
 }
 
 export function fitTotal(fit) {
@@ -19,7 +23,7 @@ export function formatPrice(value) {
 }
 
 export function fitLabel(index) {
-  return `Haul ${index + 1}`;
+  return `Fit ${index + 1}`;
 }
 
 export function itemKey(item) {
@@ -64,23 +68,23 @@ export function withPositions(items) {
 // "+" on an option: add it as another piece (up to MAX_ITEMS).
 export function addItem(fit, item) {
   if (fit.items.length >= MAX_ITEMS || onBoard(fit, item)) return fit;
-  return { items: [...fit.items, { ...item, uid: uid(), ...freePosition(fit.items, item.category) }] };
+  return { ...fit, items: [...fit.items, { ...item, uid: uid(), ...freePosition(fit.items, item.category) }] };
 }
 
 // Swap: the new piece takes the selected piece's spot (and id, so the
 // selection and position carry over without a flicker).
 export function swapItem(fit, oldItem, item) {
-  return { items: fit.items.map((i) => (i.uid === oldItem.uid ? { ...item, uid: oldItem.uid, x: oldItem.x, y: oldItem.y } : i)) };
+  return { ...fit, items: fit.items.map((i) => (i.uid === oldItem.uid ? { ...item, uid: oldItem.uid, x: oldItem.x, y: oldItem.y } : i)) };
 }
 
 export function removeItem(fit, item) {
-  return { items: fit.items.filter((i) => i.uid !== item.uid) };
+  return { ...fit, items: fit.items.filter((i) => i.uid !== item.uid) };
 }
 
 export function moveItem(fit, item, x, y) {
   // Moving also brings the piece to the front (end of the list).
   const rest = fit.items.filter((i) => i.uid !== item.uid);
-  return { items: [...rest, { ...item, x, y }] };
+  return { ...fit, items: [...rest, { ...item, x, y }] };
 }
 
 // Strip client-only fields before sharing.

@@ -122,8 +122,8 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
         </div>
       )}
       {!loading && !error && full && !swapMode && <p className="tray__note">board is full — select a piece to swap it</p>}
-      <button type="button" className="tray__close" onClick={onDismiss} aria-label="Dismiss options">
-        ×
+      <button type="button" className="tray__close" onClick={onDismiss} aria-label="Close options and zoom in on the board">
+        zoom in
       </button>
     </div>
   );
