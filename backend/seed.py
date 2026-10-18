@@ -66,6 +66,11 @@ def warm() -> None:
     global _running
     if _running:
         return
+    try:                                   # shared dataset (backend/dataset/) first: instant, no scraping
+        import dataset
+        dataset.load()
+    except Exception as err:  # noqa: BLE001
+        print(f"[dataset] could not load: {err}", file=sys.stderr)
     todo = missing(False)
     if not todo:
         return

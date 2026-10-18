@@ -200,7 +200,8 @@ def sample(items: list[dict], per_category: int, seed: int = 7) -> list[dict]:
 
 def already_have(url: str) -> bool:
     with catalog._lock:
-        return catalog._db().execute("SELECT 1 FROM products WHERE url=?", (url,)).fetchone() is not None
+        return (catalog._db().execute("SELECT 1 FROM products WHERE url=?", (url,)).fetchone() is not None
+                or catalog._db().execute("SELECT 1 FROM blocked WHERE url=?", (url,)).fetchone() is not None)
 
 
 def _download(u: str):
@@ -242,6 +243,23 @@ def apply_shard(plan: list, spec: str) -> list:
     return plan[i - 1::n]
 
 
+SKIPPED_FILE = catalog.config.DATA_DIR / "ingest_skipped.txt"
+
+
+def _load_skipped() -> set[str]:
+    try:
+        return set(SKIPPED_FILE.read_text(encoding="utf-8").split())
+    except OSError:
+        return set()
+
+
+def _remember_skipped(url: str) -> None:
+    """Products with no usable photo are not retried on every run (--retry-skipped overrides)."""
+    SKIPPED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(SKIPPED_FILE, "a", encoding="utf-8") as f:
+        f.write(url + "\n")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sites", default="stussy,uniqlo")
@@ -250,17 +268,29 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="stop after N products tried")
     ap.add_argument("--delay", type=float, default=1.0)
     ap.add_argument("--kids", action="store_true", help="include kids'/baby items (Uniqlo)")
+    ap.add_argument("--categories", default="", help="only these, comma separated: top,bottom,outerwear,shoes,bag,headwear,accessory (default: all)")
+    ap.add_argument("--uniqlo-pages", type=int, default=2, help="result pages per Uniqlo search term (36 items each); raise it for a bigger pool")
+    ap.add_argument("--retry-skipped", action="store_true", help="try again products an earlier run gave up on")
     ap.add_argument("--shard", default="", help="i/n: do only slice i of n (1-based) so teammates scrape different products; everyone must use the same other flags")
     ap.add_argument("--ai", action="store_true", help="use configured AI keys for photo choice")
     args = ap.parse_args()
     sites = [s.strip() for s in args.sites.split(",") if s.strip()]
 
+    cats = {c.strip() for c in args.categories.split(",") if c.strip()}
+    bad = cats - set(CATEGORIES)
+    if bad:
+        sys.exit(f"Unknown categories {sorted(bad)}; choose from {list(CATEGORIES)}")
+    skipped = _load_skipped()
     plan: list[dict] = []
     for site in sites:
-        rows = stussy_all() if site == "stussy" else uniqlo_all(kids=args.kids) if site == "uniqlo" else []
-        picked = sample(rows, args.per_category)
-        counts = {c: sum(1 for r in picked if r["category"] == c) for c in CATEGORIES}
-        print(f"{site}: {len(rows)} usable products in feed; planned {len(picked)}: {counts}")
+        rows = stussy_all() if site == "stussy" else uniqlo_all(pages=args.uniqlo_pages, kids=args.kids) if site == "uniqlo" else []
+        feed = len(rows)
+        if cats:
+            rows = [r for r in rows if r["category"] in cats]
+        rows = [r for r in rows if not already_have(r["url"]) and (args.retry_skipped or r["url"] not in skipped)]
+        picked = sample(rows, args.per_category)     # --per-category counts NEW products only
+        counts = {c: sum(1 for r in picked if r["category"] == c) for c in CATEGORIES if any(r["category"] == c for r in picked)}
+        print(f"{site}: {feed} usable products in feed, {len(rows)} new{' in ' + ','.join(sorted(cats)) if cats else ''}; planned {len(picked)}: {counts}")
         plan += picked
     plan = apply_shard(plan, args.shard)
     if args.dry_run:
@@ -278,6 +308,8 @@ def main() -> None:
         tried += 1
         t0 = time.time()
         ok = process(item)
+        if not ok:
+            _remember_skipped(item["url"])
         done += ok
         print(f"[{tried}] {item['brand'][:7]:7s} {item['category']:9s} {'ok  ' if ok else 'skip'} {time.time() - t0:4.1f}s · catalog {catalog.count()} · {item['name'][:50]}")
         time.sleep(args.delay)

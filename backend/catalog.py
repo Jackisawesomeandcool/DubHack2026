@@ -68,6 +68,12 @@ def _db() -> sqlite3.Connection:
             CREATE TABLE IF NOT EXISTS results (
                 key TEXT PRIMARY KEY, urls TEXT NOT NULL, created REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS blocked (      -- hand-removed products: never re-added by scrapers/seed
+                url TEXT PRIMARY KEY, removed_at REAL NOT NULL, snapshot TEXT
+            );
+            CREATE TABLE IF NOT EXISTS reviewed (     -- products a human has looked at and approved
+                url TEXT PRIMARY KEY, at REAL NOT NULL
+            );
         """)
     return _conn
 
@@ -94,6 +100,8 @@ def upsert(items: list[dict], models: bool, query: str = "", source: str = "") -
             if not it.get("image"):
                 continue
             url = _url_key(it)
+            if db.execute("SELECT 1 FROM blocked WHERE url=?", (url,)).fetchone():
+                continue                      # removed by hand in view_catalog.py
             words = {w for w in _WORD.findall(f"{query} {it.get('name','')}".lower()) if w not in _STOP and len(w) > 1}
             row = db.execute("SELECT tags, cutout_p, cutout_m FROM products WHERE url=?", (url,)).fetchone()
             col = "cutout_m" if models else "cutout_p"
@@ -109,6 +117,11 @@ def upsert(items: list[dict], models: bool, query: str = "", source: str = "") -
                     (url, it["name"], it["brand"], float(it.get("price") or 0), it["category"], " ".join(sorted(words)),
                      it["image"], it.get("stock", "in_stock"), source, now, now))
         db.commit()
+
+
+def is_blocked(url: str) -> bool:
+    with _lock:
+        return _db().execute("SELECT 1 FROM blocked WHERE url=?", (url,)).fetchone() is not None
 
 
 def set_stock(url: str, stock: str) -> None:

@@ -157,7 +157,8 @@ def parse_product(html: str) -> dict | None:
 
 def already_have(url: str) -> bool:
     with catalog._lock:
-        return catalog._db().execute("SELECT 1 FROM products WHERE url=?", (url,)).fetchone() is not None
+        return (catalog._db().execute("SELECT 1 FROM products WHERE url=?", (url,)).fetchone() is not None
+                or catalog._db().execute("SELECT 1 FROM blocked WHERE url=?", (url,)).fetchone() is not None)
 
 
 def ingest_one(cat: str, url: str, models: bool) -> bool:

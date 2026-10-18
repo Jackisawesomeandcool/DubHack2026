@@ -1,0 +1,13 @@
+#!/bin/sh
+# Refreshes backend/dataset/ (the shared catalog + cutout images) so every commit carries
+# the latest data. Enable once per clone:   git config core.hooksPath .githooks
+# Never blocks a commit: if anything fails it just says so and moves on.
+root="$(git rev-parse --show-toplevel)" || exit 0
+cd "$root/backend" 2>/dev/null || exit 0
+[ -f data/catalog.sqlite ] || exit 0
+if python3 dataset.py load --quiet >/dev/null 2>&1 && python3 dataset.py export --quiet >/dev/null 2>&1; then
+  git add dataset
+else
+  echo "pre-commit: could not refresh backend/dataset (continuing without it)" >&2
+fi
+exit 0
