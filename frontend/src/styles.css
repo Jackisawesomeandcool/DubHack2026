@@ -918,7 +918,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .tray__favs.is-on { background: var(--ink); color: #fff; }
 
 /* ==================================================================
-   ACCOUNT SCREENS — log in, sign up, pick vibes (demo accounts,
+   ACCOUNT SCREENS — log in, sign up (demo accounts,
    see lib/session.js). Same tokens as the builder.
    ================================================================== */
 
@@ -959,10 +959,6 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .auth__head { display: flex; flex-direction: column; gap: 6px; }
 .auth__head h1 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
 .auth__head p { margin: 0; font-size: 15px; color: var(--ink-3); }
-.auth__steps { display: flex; align-items: center; gap: 6px; }
-.auth__steps span { width: 28px; height: 4px; border-radius: var(--r-pill); background: #d3cfc7; }
-.auth__steps span.is-on { background: var(--ink); }
-.auth__steps small { margin-left: 6px; font-size: 12px; color: var(--ink-3); }
 .auth__submit {
   height: 52px;
   padding: 0 26px;
@@ -1051,69 +1047,11 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .auth__guest { font-size: 13px; color: var(--ink-3); }
 .auth__guest a { color: var(--ink-2); }
 
-/* ------------------------------------------------------------------ pick vibes */
-.vibes {
-  height: 100%;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  padding: 28px 32px;
-  max-width: 1500px;
-  margin: 0 auto;
-}
-.vibes__bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-.vibes__right { display: flex; align-items: center; gap: 18px; }
-.vibes__skip { font-size: 14px; font-weight: 600; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; min-height: 44px; }
-.vibes__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
-.vibe {
-  position: relative;
-  height: 170px;
-  padding: 18px;
-  border: 2px solid transparent;
-  border-radius: 22px;
-  background: var(--surface);
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  transition: transform var(--fast) var(--ease), background var(--fast), border-color var(--fast);
-}
-.vibe:hover { transform: translateY(-2px); background: var(--paper); }
-.vibe.is-on { border-color: var(--ink); background: var(--paper); }
-.vibe__swatch { display: flex; }
-.vibe__swatch i { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--paper); box-shadow: var(--shadow-sm); margin-right: -12px; }
-.vibe__name { font-size: 18px; font-weight: 700; }
-.vibe__check {
-  position: absolute; top: 14px; right: 14px;
-  width: 28px; height: 28px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--ink); color: var(--accent-ink);
-}
-.vibes__footer {
-  margin-top: auto;
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 10px 10px 10px 22px;
-  border-radius: var(--r-pill);
-  background: var(--paper);
-  box-shadow: var(--shadow-md);
-  font-size: 14px;
-  color: var(--ink-2);
-}
-.vibes__footer strong { color: var(--ink); }
-
 @media (max-width: 860px) {
   .auth { grid-template-columns: 1fr; padding: 16px; gap: 20px; }
   .auth__panel { min-height: 300px; }
   .auth__pitch h2 { font-size: 28px; }
   .auth__head h1 { font-size: 28px; }
-  .vibes { padding: 16px; }
   .account__name { max-width: 90px; }
   .field__pair { grid-template-columns: 1fr; }
 }

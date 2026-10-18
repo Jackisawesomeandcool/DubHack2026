@@ -58,7 +58,7 @@ export default function AuthPage({ mode = 'login' }) {
       if (!/^\S+@\S+\.\S+$/.test(id)) return setError('Enter a valid email.');
       if (password.length < 8) return setError('Password needs at least 8 characters.');
       signUp({ firstName, username, email: id });
-      go('/welcome');
+      go('/');
     } else {
       if (!id) return setError('Enter your email or username.');
       if (!password) return setError('Enter your password.');
@@ -88,12 +88,6 @@ export default function AuthPage({ mode = 'login' }) {
 
       <section className="auth__side">
         <form className="auth__form" onSubmit={submit} noValidate>
-          {isSignup && (
-            <div className="auth__steps" aria-label="Step 1 of 2">
-              <span className="is-on" aria-hidden="true" /><span aria-hidden="true" />
-              <small>Step 1 of 2</small>
-            </div>
-          )}
           <div className="auth__head">
             <h1>{copy.title}</h1>
             <p>{copy.sub}</p>

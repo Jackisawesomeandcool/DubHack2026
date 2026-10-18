@@ -1,12 +1,10 @@
 // Demo-only accounts. Nothing here talks to the backend: the "user" is just
 // a name + email kept in this browser so the app can greet people and route
-// them through log in / sign up / pick vibes. Real auth would replace this file.
+// them through log in / sign up. Real auth would replace this file.
 
 const USER = 'haul:user';
 const ACCOUNTS = 'haul:accounts'; // everyone who signed up in this browser
 const GUEST = 'haul:guest';
-const VIBES = 'haul:vibes';
-const VIBES_PENDING = 'haul:vibes-pending';
 
 function read(key, fallback) {
   try {
@@ -75,23 +73,6 @@ export function isGuest() {
 // Signed in or chose guest: either way they may use the builder.
 export function hasSession() {
   return Boolean(loadUser()) || isGuest();
-}
-
-export function loadVibes() {
-  return read(VIBES, []);
-}
-
-// Saved from onboarding; HaulCreator turns them into one search the first time it opens.
-export function saveVibes(vibes) {
-  write(VIBES, vibes);
-  write(VIBES_PENDING, vibes.length > 0);
-}
-
-export function takeVibePrompt() {
-  if (!read(VIBES_PENDING, false)) return '';
-  write(VIBES_PENDING, null);
-  const vibes = loadVibes();
-  return vibes.length ? `${vibes.join(', ')} pieces` : '';
 }
 
 export function go(path) {
