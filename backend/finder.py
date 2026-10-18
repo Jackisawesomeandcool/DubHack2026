@@ -28,7 +28,7 @@ import catalog
 import intent as intent_mod
 import ranker
 
-COUNT = 6
+COUNT = 30   # the tray scrolls, so show everything that fits the request (up to this)
 
 
 class NoMatch(Exception):

@@ -325,6 +325,24 @@ def search(intent_: Intent, models: bool, exclude: list[str], limit: int = 6) ->
     term_words = intent_.term_words()
     pool = [r for r in _rows(intent_) if r["name"].lower() not in ex]
     scored = [(s, r) for r in pool for s in [_score(r, term_words)] if s > 0]
+    words = intent_.words()
+    # Words that are a filter and nothing more: brand, color, number, filler, or a bare category
+    # name ("shoes", "tops"). A garment word like "tee" or "hoodie" stays a real search term.
+    def _bare_category(w):
+        return w in _SYN and _SYN[w] in (w, w.rstrip("s"), w + "s")
+    filterish = bool(pool) and bool(words) and all(
+        w in intent_mod.VIBES or w in _GENERIC or _bare_category(w) or w in intent_mod.COLOR_WORD
+        or w in intent_mod._BRAND_WORDS or w.isdigit() for w in words)
+    if filterish and not any(w in intent_mod.VIBES for w in words):
+        # "stussy", "nike shoes under 100": every word is already a hard filter, so the whole
+        # filtered pool is the answer. Literal name hits still float to the top.
+        hit = {id(r): s for s, r in scored}
+        scored = [(hit.get(id(r), 0.1), r) for r in pool]
+    if any(w in intent_mod.VIBES for w in words):
+        # A mood word ("gym", "fall", "comfy") reaches past the literal hits: "gym" should bring
+        # training gear, not only the one product with "Gym" in its name.
+        seen = {id(r) for _, r in scored}
+        scored += [(s, r) for s, r in _vibe_scored(pool, words) if id(r) not in seen]
     if not scored and sum(len(ws) for ws in term_words) >= 3:
         # A descriptive request ("skater fit with wide-leg pants and skate shoes"): no item carries
         # every word, so rank by how many it does carry. Hard filters still apply.
