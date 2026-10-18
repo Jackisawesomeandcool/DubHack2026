@@ -56,6 +56,13 @@ def _save_cache() -> None:
     _cache_path.write_text(json.dumps(_cache), encoding="utf-8")
 
 
+def _fullres(url: str | None) -> str | None:
+    """Nike CDN thumbnails carry a transform segment; ask for the large one."""
+    if not url:
+        return url
+    return url.replace("/t_PDP_144_v1/", "/t_PDP_1280_v1/").replace("/t_PDP_144_v1,", "/t_PDP_1280_v1,").replace("/t_default/", "/t_PDP_1280_v1/")
+
+
 # ---------------------------------------------------------------- fetch
 def _download(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": images.UA, "Accept": "image/*,*/*"})
@@ -168,10 +175,11 @@ def resolve(item: dict, allow_models: bool = False) -> None:
             chosen = direct
         else:
             cands: list[str] = []
-            for c in [item.get("image_product"), item.get("image_model"), item.get("image")]:
+            for c in [item.get("image_product"), item.get("image_model"), item.get("image")] + list(item.get("candidates") or []):
+                c = _fullres(c)
                 if c and c not in cands:
                     cands.append(c)
-            if item.get("url"):
+            if item.get("url") and not item.get("candidates"):
                 for c in images.candidates_from_page(item["url"]):
                     if c not in cands:
                         cands.append(c)

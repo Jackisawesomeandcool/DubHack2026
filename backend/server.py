@@ -23,6 +23,7 @@ import cutouts
 import finder
 import fits
 import llm
+import seed
 import stock
 import store
 from products import CATEGORIES
@@ -194,12 +195,14 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     import gsearch
-    src = "google" if gsearch.configured() else "web"
-    mode = f"search: {src}{' + ' + llm.provider() if llm.configured() else ''} · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}"
+    live = [n for n, on in (("google", gsearch.configured()), ("web", config.WEB_SEARCH), (llm.provider(), llm.configured())) if on]
+    mode = f"catalog + seed{' + ' + ' + '.join(live) if live else ' (no live search)'} · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
     print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER}")
     cutouts.warm()
-    catalog.warm(lambda term, models: finder.find(term, models, local_first=False))
+    seed.warm()
+    if gsearch.configured() or config.WEB_SEARCH or llm.configured():
+        catalog.warm(lambda term, models: finder.find(term, models, local_first=False))
     stock.start()
     fits.ensure_pool()
     ThreadingHTTPServer((config.HOST, config.PORT), Handler).serve_forever()

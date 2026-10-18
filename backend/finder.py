@@ -15,6 +15,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import catalog
+import config
 import cutouts
 import gsearch
 import llm
@@ -47,12 +48,13 @@ def _live(prompt: str, category: str | None, exclude: list[str], count: int) -> 
         if items:
             print(f"[finder] google search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
             return items, "google"
-    items = normalize_list(websearch.search(prompt, category, exclude, count))
-    if items:
-        print(f"[finder] web search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
-        return items, "web"
+    if config.WEB_SEARCH:
+        items = normalize_list(websearch.search(prompt, category, exclude, count))
+        if items:
+            print(f"[finder] web search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
+            return items, "web"
     if not llm.configured():
-        raise llm.LLMError("No listings found (web search) and no AI key configured")
+        raise llm.LLMError("no more matches in the catalog (no live search configured)")
     items = llm.search_products(prompt, category, exclude, count)
     print(f"[finder] {llm.provider()} search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
     return items, llm.provider()

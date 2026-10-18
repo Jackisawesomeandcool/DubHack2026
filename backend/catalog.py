@@ -194,6 +194,13 @@ def random_fit(models: bool) -> dict | None:
             "items": [_row_to_item(random.choice(by_cat[c]), models) for c in cats]}
 
 
+def known_urls(models: bool | None = None) -> set[str]:
+    col = "cutout_m" if models else "cutout_p"
+    with _lock:
+        rows = _db().execute(f"SELECT url FROM products" + ("" if models is None else f" WHERE {col} IS NOT NULL")).fetchall()
+    return {r["url"] for r in rows}
+
+
 def count(models: bool | None = None) -> int:
     with _lock:
         if models is None:
