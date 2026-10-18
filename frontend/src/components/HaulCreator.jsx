@@ -7,7 +7,6 @@ import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
-import TrendingPrompts from './TrendingPrompts.jsx';
 import Backdrop from './Backdrop.jsx';
 import AccountMenu from './AccountMenu.jsx';
 import { health, loadState, randomFit, saveState, saveStateBeacon, seen, suggest } from '../lib/api.js';
@@ -346,10 +345,7 @@ export default function HaulCreator() {
             onUnfavorite={toggleFav}
           />
         )}
-        <div className="dock__row">
-          <TrendingPrompts onPick={find} busy={Boolean(active?.loading)} />
-          <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
-        </div>
+        <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
       </footer>
     </main>
   );
