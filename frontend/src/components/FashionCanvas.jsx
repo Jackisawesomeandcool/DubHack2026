@@ -20,6 +20,7 @@ export default function FashionCanvas({
   onHintClick,
   isFavorite,
   onFavorite,
+  tools = null,
 }) {
   const ref = useRef(null);
   const [selected, setSelected] = useState(null); // { uid, anchor }
@@ -81,6 +82,8 @@ export default function FashionCanvas({
       {wipe && <HaulWipe wipe={wipe} canvasRef={ref} stageRef={stageRef} onDone={endWipe} />}
 
       {editable && <div className="canvas__dropout" aria-hidden="true">release to remove</div>}
+
+      {tools}
 
       {hint && items.length === 0 && !loading && (
         <p className={`canvas__hint${onHintClick ? ' is-clickable' : ''}`} onClick={onHintClick}>{hint}</p>

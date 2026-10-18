@@ -654,7 +654,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   animation: rise var(--mid) var(--ease);
   transition: background var(--fast), color var(--fast), transform var(--fast) var(--ease);
 }
-.bubble:hover { transform: translateX(3px); box-shadow: var(--shadow-md); }
+.bubble-wrap:hover .bubble, .bubble:focus-visible { transform: translateX(3px); box-shadow: var(--shadow-md); }
 .bubble__icon { flex: none; width: 15px; height: 15px; opacity: 0.55; }
 .bubble__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* one look for every bubble: the open one is only marked by a thin outline */
@@ -1574,4 +1574,122 @@ a.links__row:hover { background: var(--surface); }
 @media (max-width: 760px) {
   .links__btn { height: 40px; padding: 0 14px; }
   .links__menu { position: fixed; top: 68px; left: 12px; right: 12px; width: auto; }
+}
+
+/* ------------------------------------------------------------------ board corner tools
+   Round buttons in the bottom-right of the board: clear this fit (asks first) and favorites. */
+.canvas__tools {
+  position: absolute;
+  right: 14px; bottom: 14px;
+  z-index: 70; /* above pieces (max 60), below the product card (100) */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ctool {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  height: 36px;
+  min-width: 36px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--fast), color var(--fast), gap var(--mid) var(--ease), padding var(--mid) var(--ease),
+    transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.ctool svg { flex: none; }
+.ctool:hover:not(:disabled) { color: var(--ink); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.ctool:active:not(:disabled) { transform: scale(0.95); }
+.ctool:disabled { opacity: 0.4; cursor: default; }
+.ctool__label {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width var(--mid) var(--ease), opacity var(--fast);
+}
+/* armed: grows into a red pill (same shape as "zoom in") asking to confirm */
+.ctool--clear.is-armed { gap: 6px; padding: 0 14px 0 11px; background: #d93636; color: #fff; }
+.ctool--clear.is-armed:hover { color: #fff; background: #c42c2c; }
+.ctool--clear.is-armed .ctool__label { max-width: 120px; opacity: 1; }
+.ctool--fav { color: #e0a100; }
+.ctool--fav:hover:not(:disabled) { color: #e0a100; }
+.ctool--fav.is-on { background: var(--ink); color: #f5c542; }
+
+/* swap mode: "+ add" under "try" puts the piece on the board as a new one */
+.chip.is-swap .chip__swap { top: 34%; }
+.chip__add {
+  position: absolute;
+  left: 50%; top: 62%;
+  z-index: 2;
+  transform: translate(-50%, -50%) scale(0.92);
+  padding: 5px 11px;
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--fast), transform var(--fast) var(--ease), background var(--fast), color var(--fast);
+}
+.chip.is-swap:hover .chip__add,
+.chip.is-swap:focus-within .chip__add { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+.chip__add:hover:not(:disabled) { background: var(--ok); color: #fff; }
+.chip.is-swap:hover .chip__add:disabled { opacity: 0.7; cursor: default; }
+
+/* search history: × to remove one, shown on hover */
+.bubble-wrap { position: relative; display: flex; max-width: 100%; }
+.bubble__del {
+  position: absolute;
+  top: -6px; right: -6px;
+  z-index: 1;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--line);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.8);
+  transition: opacity var(--fast), transform var(--fast) var(--ease), background var(--fast), color var(--fast);
+}
+.bubble-wrap:hover .bubble__del,
+.bubble-wrap:focus-within .bubble__del { opacity: 1; pointer-events: auto; transform: translateX(3px); }
+.bubble-wrap .bubble__del:hover { background: var(--out); color: #fff; transform: translateX(3px) scale(1.1); }
+@media (hover: none) { .bubble__del { opacity: 1; pointer-events: auto; transform: none; } }
+
+/* tray arriving: the slot grows from nothing (so the board shrinks up from below) and the
+   pieces rise into it from just above the search bar, left to right */
+.tray-slot { display: grid; grid-template-rows: 1fr; justify-items: center; width: 100%; min-width: 0; }
+.tray-slot > * { min-height: 0; }
+@keyframes slotOpen { from { grid-template-rows: 0fr; } to { grid-template-rows: 1fr; } }
+@keyframes chipRise { from { opacity: 0; translate: 0 64px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .tray-slot.is-opening { overflow: clip; animation: slotOpen 420ms var(--ease) both; }
+  .tray-slot.is-opening .tray { animation: none; }
+  /* `translate` (not `transform`) so the chips keep their tilt and hover lift */
+  .tray-slot.is-opening .chip { animation: chipRise 440ms var(--ease) backwards; }
+  .tray-slot.is-opening .chip--skeleton,
+  .tray-slot.is-opening .chip--pending { animation: chipRise 440ms var(--ease) backwards, shimmer 1.2s linear infinite; }
+  .tray-slot.is-opening .chip:nth-child(1) { animation-delay: 60ms, 0ms; }
+  .tray-slot.is-opening .chip:nth-child(2) { animation-delay: 100ms, 0ms; }
+  .tray-slot.is-opening .chip:nth-child(3) { animation-delay: 140ms, 0ms; }
+  .tray-slot.is-opening .chip:nth-child(4) { animation-delay: 180ms, 0ms; }
+  .tray-slot.is-opening .chip:nth-child(5) { animation-delay: 220ms, 0ms; }
+  .tray-slot.is-opening .chip:nth-child(6) { animation-delay: 260ms, 0ms; }
+  .tray-slot.is-opening .chip:nth-child(n + 7) { animation-delay: 300ms, 0ms; }
 }

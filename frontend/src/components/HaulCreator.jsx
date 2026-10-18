@@ -5,7 +5,8 @@ import ShareControl from './ShareControl.jsx';
 import StoreLinks from './StoreLinks.jsx';
 import ThemeControl from './ThemeControl.jsx';
 import FashionCanvas from './FashionCanvas.jsx';
-import OptionsTray from './OptionsTray.jsx';
+import OptionsTray, { TraySlot } from './OptionsTray.jsx';
+import CanvasTools from './CanvasTools.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import { setAiAvailable } from '../lib/aiMode.js';
@@ -14,7 +15,7 @@ import Backdrop from './Backdrop.jsx';
 import AccountMenu from './AccountMenu.jsx';
 import { health, loadState, randomFit, saveState, saveStateBeacon, seen, suggest } from '../lib/api.js';
 import { loadUser, token } from '../lib/session.js';
-import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, exportFits, fitTotal, moveItem, onBoard, removeItem, sameProduct, spreadPositions, swapItem, withPositions } from '../lib/haul.js';
+import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, exportFits, fitLabel, fitTotal, moveItem, onBoard, removeItem, sameProduct, spreadPositions, swapItem, withPositions } from '../lib/haul.js';
 import { isFavorite, loadFavorites, saveFavorites, toggleFavorite } from '../lib/favorites.js';
 
 const MAX_HISTORY = 7;
@@ -301,6 +302,20 @@ export default function HaulCreator() {
     setCurrent((cur) => (cur > index ? cur - 1 : Math.min(cur, fits.length - 2)));
   }
 
+  // Empties the fit on screen only; the other fits keep their pieces.
+  function clearFit() {
+    revertSwap(swapRef.current);
+    setSwap(null);
+    update(current, (f) => ({ ...f, items: [] }));
+  }
+
+  // Remove one past search from the history list (closing its results if they're showing).
+  function deleteHistory(id) {
+    setHistory((prev) => prev.filter((h) => h.id !== id));
+    if (activeId === id) setActiveId(null);
+    if (searchNote?.id === id) setSearchNote(null);
+  }
+
   function addFit() {
     if (fits.length >= MAX_FITS) return;
     const index = fits.length;
@@ -352,6 +367,15 @@ export default function HaulCreator() {
           onDragOutChange={setDragOut}
           isFavorite={(item) => isFavorite(favorites, item)}
           onFavorite={toggleFav}
+          tools={(
+            <CanvasTools
+              fitLabel={fitLabel(current)}
+              canClear={fit.items.length > 0 && !loadingFit}
+              onClear={clearFit}
+              favOn={favMode}
+              onFavorites={toggleFavMode}
+            />
+          )}
         />
         <BrowseColumn
           swapMode={Boolean(swap)}
@@ -359,11 +383,12 @@ export default function HaulCreator() {
         />
       </div>
 
-      <SearchHistory entries={history} activeId={activeId} onSelect={setActiveId} />
+      <SearchHistory entries={history} activeId={activeId} onSelect={setActiveId} onDelete={deleteHistory} />
 
       <footer className="dock">
         {setup && <div className="notice">{setup}</div>}
         {showTray && (
+          <TraySlot>
           <OptionsTray
             title={swap ? `swap ${swap.original.category === 'bottom' ? 'bottoms' : swap.original.category}${favMode ? ' · favorites' : ''}` : favMode ? 'favorites' : ''}
             options={trayOptions}
@@ -385,6 +410,7 @@ export default function HaulCreator() {
             onToggleFavMode={toggleFavMode}
             onUnfavorite={toggleFav}
           />
+          </TraySlot>
         )}
         <PromptBar
           onSubmit={find}

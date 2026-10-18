@@ -31,6 +31,18 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd, 
         {aiName(item) && <span className="chip__ai" title={`Suggested by ${aiName(item)}`} aria-label={`Suggested by ${aiName(item)}`}>✦</span>}
         {swapMode && !onBoard && <span className="chip__swap">try</span>}
       </button>
+      {/* In a swap, "try" previews the piece in the selected spot; this adds it as a new piece instead. */}
+      {swapMode && !onBoard && !isPreview && (
+        <button
+          type="button"
+          className="chip__add"
+          disabled={full}
+          onClick={() => onAdd(item)}
+          aria-label={full ? 'Board is full' : `Add ${item.name} to the board as a new piece`}
+        >
+          {full ? 'board full' : '+ add'}
+        </button>
+      )}
       {!swapMode && !onUnfavorite && (
         <button
           type="button"
@@ -150,4 +162,15 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
       {!loading && !error && full && !swapMode && <p className="tray__note">board is full — select a piece to swap it</p>}
     </div>
   );
+}
+
+// Wraps the tray so its arrival is animated: the slot grows from nothing (the board above
+// shrinks with it) while the pieces rise into view from just above the search bar.
+export function TraySlot({ children }) {
+  const [opening, setOpening] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setOpening(false), 800); // longest chip rise + its stagger
+    return () => clearTimeout(t);
+  }, []);
+  return <div className={`tray-slot${opening ? ' is-opening' : ''}`}>{children}</div>;
 }
