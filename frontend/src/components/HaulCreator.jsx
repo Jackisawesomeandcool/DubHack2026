@@ -7,7 +7,7 @@ import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import Backdrop from './Backdrop.jsx';
-import AccountChip from './AccountChip.jsx';
+import AccountMenu from './AccountMenu.jsx';
 import { health, randomFit, seen, suggest } from '../lib/api.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
 import { isFavorite, loadFavorites, saveFavorites, toggleFavorite } from '../lib/favorites.js';
@@ -238,10 +238,10 @@ export default function HaulCreator() {
     <main className="app">
       <Backdrop index={current} />
       <header className="bar">
-        <AccountChip />
         <div className="bar__right">
           <HaulTotal total={total} resetKey={`${current}:${loadingFit}`} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
+          <AccountMenu />
         </div>
       </header>
 

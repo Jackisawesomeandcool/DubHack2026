@@ -8,7 +8,6 @@ const COPY = {
   login: {
     title: 'Welcome back',
     sub: 'Log in to pick up your hauls.',
-    google: 'Continue with Google',
     submit: 'Log in',
     headline: 'Build outfits from real stores.',
     tagline: 'Mix pieces, swap in dupes, share the haul.',
@@ -16,7 +15,6 @@ const COPY = {
   signup: {
     title: 'Create your account',
     sub: 'It takes about a minute.',
-    google: 'Sign up with Google',
     submit: 'Continue',
     headline: 'Save your hauls. Share them in one link.',
     tagline: 'Keep several hauls going at once and come back to them anytime.',
@@ -93,9 +91,6 @@ export default function AuthPage({ mode = 'login' }) {
             <p>{copy.sub}</p>
           </div>
 
-          {/* Demo: Google behaves like the guest path so judges can't get stuck. */}
-          <button type="button" className="auth__alt" onClick={guest}>{copy.google}</button>
-          <div className="auth__or"><span>or</span></div>
 
           {isSignup && (
             <div className="field__pair">

@@ -922,19 +922,22 @@ button:focus-visible, input:focus-visible, a:focus-visible {
    see lib/session.js). Same tokens as the builder.
    ================================================================== */
 
-/* ------------------------------------------------------------------ account chip (builder top-left) */
-.bar .account { margin-right: auto; }
-.account {
+/* ------------------------------------------------------------------ account menu (header, right of Share) */
+.account { position: relative; display: flex; align-items: center; }
+.account__btn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   height: 44px;
-  padding: 0 16px 0 6px;
+  padding: 0 12px 0 6px;
   border-radius: var(--r-pill);
   background: var(--paper);
   box-shadow: var(--shadow-sm);
   font-size: 14px;
+  font-weight: 600;
+  transition: box-shadow var(--fast) var(--ease), background var(--fast);
 }
+.account__btn:hover, .account__btn.is-open { box-shadow: var(--shadow-md); }
 .account__avatar {
   width: 32px; height: 32px;
   border-radius: 50%;
@@ -944,15 +947,46 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   font-weight: 700;
   font-size: 13px;
 }
-.account__name { font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account__link {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink-3);
-  text-decoration: none;
-  padding: 4px 0;
+.account__name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account__chev { color: var(--ink-3); transition: transform var(--fast) var(--ease); }
+.account__btn.is-open .account__chev { transform: rotate(180deg); }
+.account__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 95;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--paper);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md), 0 0 0 1px var(--line);
+  animation: popIn 180ms var(--ease);
 }
-.account__link:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.account__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+.account__who strong { font-size: 14px; color: var(--ink); }
+.account__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  transition: background var(--fast);
+}
+.account__item:hover { background: var(--surface); }
 
 /* ------------------------------------------------------------------ shared bits */
 .auth__brand { font-weight: 800; font-size: 24px; letter-spacing: -0.02em; }
@@ -1003,18 +1037,6 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .auth__side { display: flex; align-items: center; justify-content: center; }
 .auth__form { width: min(400px, 100%); display: flex; flex-direction: column; gap: 16px; }
 .auth__head { margin-bottom: 8px; }
-.auth__alt {
-  height: 52px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--line);
-  background: var(--paper);
-  font-size: 15px;
-  font-weight: 600;
-  transition: border-color var(--fast), box-shadow var(--fast);
-}
-.auth__alt:hover { border-color: var(--line-2); box-shadow: var(--shadow-sm); }
-.auth__or { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-3); }
-.auth__or::before, .auth__or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 13px; font-weight: 600; }
@@ -1052,6 +1074,6 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   .auth__panel { min-height: 300px; }
   .auth__pitch h2 { font-size: 28px; }
   .auth__head h1 { font-size: 28px; }
-  .account__name { max-width: 90px; }
+  .account__name { display: none; }
   .field__pair { grid-template-columns: 1fr; }
 }
