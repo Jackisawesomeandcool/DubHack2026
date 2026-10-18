@@ -474,7 +474,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .tray {
   position: relative;
   width: min(820px, 100%);
-  padding: 4px 44px 2px 4px;
+  padding: 4px 92px 2px 4px;
   animation: rise var(--mid) var(--ease);
 }
 .tray__title { margin: 0 6px 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
@@ -507,11 +507,11 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .tray__close {
   position: absolute;
   top: 8px; right: 4px;
-  width: 32px; height: 32px;
-  border-radius: 50%;
+  height: 30px; padding: 0 12px;
+  border-radius: var(--r-pill);
   background: var(--paper);
   color: var(--ink-2);
-  font-size: 18px;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
   line-height: 1;
   display: grid; place-items: center;
   box-shadow: var(--shadow-sm);
