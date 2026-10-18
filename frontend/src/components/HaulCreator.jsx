@@ -90,7 +90,7 @@ export default function HaulCreator() {
     setFitError('');
     try {
       const { items } = await randomFit(modelsRef.current);
-      update(index, () => ({ items: withPositions(items) }));
+      update(index, (f) => ({ ...f, items: withPositions(items) }));
       seen(items);
     } catch (err) {
       setFitError(`couldn’t load a fit — ${err.message || 'try again'}`);
@@ -114,7 +114,7 @@ export default function HaulCreator() {
           }
           const hauls = saved.hauls.filter((h) => h.items.length);
           if (hauls.length) {
-            setFits(hauls.map((h) => ({ items: withPositions(h.items) })));
+            setFits(hauls.map((h) => emptyFit(withPositions(h.items))));
             setCurrent(0);
             restored.current = true;
             return;
@@ -301,7 +301,7 @@ export default function HaulCreator() {
       <Backdrop index={current} />
       <header className="bar">
         <div className="bar__right">
-          <HaulTotal total={total} resetKey={`${current}:${loadingFit}`} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
+          <HaulTotal total={total} resetKey={`${fit.id}:${loadingFit}`} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
           <ThemeControl />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
           <AccountMenu />
