@@ -1077,3 +1077,56 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   .account__name { display: none; }
   .field__pair { grid-template-columns: 1fr; }
 }
+
+/* ==================================================================
+   HAUL SWITCH MOTION — sliding indicator + board sweep
+   ================================================================== */
+
+/* ------------------------------------------------------------------ sliding haul indicator */
+.fits { position: relative; }
+.fits__indicator {
+  position: absolute;
+  top: 0; left: 0;
+  z-index: 0;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  pointer-events: none;
+  transition-property: transform, width, height;
+  transition-timing-function: cubic-bezier(0.65, 0, 0.25, 1);
+}
+.fits__item { z-index: 1; }
+.fits__del { z-index: 2; }
+/* the indicator is the active background now; the label turns white as it arrives */
+.fits__tab.is-active,
+.fits__tab.is-active:hover {
+  background: transparent;
+  color: var(--accent-ink);
+  transition: color 140ms var(--ease) calc(var(--slide-ms, 0ms) * 0.55), transform var(--fast) var(--ease);
+}
+
+/* ------------------------------------------------------------------ board sweep */
+.canvas.is-wiping { overflow: hidden; }
+.canvas__stage--old { pointer-events: none; }
+.item--ghost { animation: none; cursor: default; }
+.wipe-line {
+  position: absolute;
+  left: 50%; top: 50%;
+  z-index: 70;
+  background: var(--ink);
+  pointer-events: none;
+  will-change: transform;
+  backface-visibility: hidden; /* keeps the edges crisp while it moves */
+}
+.wipe-trail {
+  position: absolute;
+  left: 50%; top: 50%;
+  z-index: 69;
+  /* after rotation, "top" is the direction of travel: dark at the line, clear behind it */
+  background: linear-gradient(to top, rgb(29 28 26 / 0) 0%, rgb(29 28 26 / 0.12) 55%, rgb(29 28 26 / 0.34) 100%);
+  pointer-events: none;
+  will-change: transform, height;
+}
+
+@media (max-width: 760px) {
+  .fits__indicator { border-radius: var(--r-pill); }
+}

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import FashionItem from './FashionItem.jsx';
+import HaulWipe, { randomDirection } from './HaulWipe.jsx';
 import ProductPopup from './ProductPopup.jsx';
 
 // The outfit board. Pieces are real product photos; in edit mode they can be
@@ -39,14 +40,27 @@ export default function FashionCanvas({
 
   useEffect(() => setSelected(null), [fitKey]);
 
+  // Switching hauls: remember what the board showed, then sweep it away (HaulWipe).
+  const stageRef = useRef(null);
+  const shown = useRef({ key: fitKey, items });
+  const [wipe, setWipe] = useState(null); // { from, dir }
+  useLayoutEffect(() => {
+    if (fitKey === shown.current.key) { shown.current.items = items; return; }
+    const from = shown.current.items;
+    shown.current = { key: fitKey, items };
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    setWipe(reduce ? null : { from, dir: randomDirection() });
+  }, [fitKey, items]);
+  const endWipe = useCallback(() => setWipe(null), []);
+
   const selectedItem = (selected && items.find((i) => i.uid === selected.uid)) || null;
   useEffect(() => { onSelectionChange?.(selectedItem); }, [selectedItem]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const close = useCallback(() => setSelected(null), []);
 
   return (
-    <section ref={ref} className={`canvas${loading ? ' is-loading' : ''}${draggingOut ? ' is-dragging-out' : ''}`} aria-label="Outfit board">
-      <div className="canvas__stage" key={fitKey}>
+    <section ref={ref} className={`canvas${loading ? ' is-loading' : ''}${draggingOut ? ' is-dragging-out' : ''}${wipe ? ' is-wiping' : ''}`} aria-label="Outfit board">
+      <div className="canvas__stage" key={fitKey} ref={stageRef}>
         {items.map((item, i) => (
           <FashionItem
             key={item.uid}
@@ -63,6 +77,8 @@ export default function FashionCanvas({
           />
         ))}
       </div>
+
+      {wipe && <HaulWipe wipe={wipe} canvasRef={ref} stageRef={stageRef} onDone={endWipe} />}
 
       {editable && <div className="canvas__dropout" aria-hidden="true">release to remove</div>}
 

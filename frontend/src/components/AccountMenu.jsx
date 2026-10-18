@@ -42,7 +42,6 @@ export default function AccountMenu() {
           <div className="account__who">
             <strong>{user ? name : 'Browsing as guest'}</strong>
             {user?.username && <span>@{user.username}</span>}
-            {user?.email && <span>{user.email}</span>}
           </div>
           {user ? (
             <button type="button" role="menuitem" className="account__item" onClick={() => { logOut(); go('/login'); }}>
