@@ -135,18 +135,28 @@ export default function HaulCreator() {
     return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // "No shoes under $30" -> a note above the search bar with the nearest-priced products on offer.
+  const [searchNote, setSearchNote] = useState(null); // { id, reason, closest }
+  const showClosest = () => {
+    if (!searchNote) return;
+    patchHistory(searchNote.id, { options: searchNote.closest.map((i) => ({ ...i, pending: false })), loading: false });
+    setSearchNote(null);
+  };
+
   // Click the error message to try loading again.
   const retry = () => !loadingFit && fit.items.length === 0 && loadRandom(current);
 
   // Running a search (the arrow button / Enter) brings the tray back to suggestions.
   async function find(prompt) {
     if (favMode) toggleFavMode();
+    setSearchNote(null);
     const id = nextId.current++;
     setHistory((prev) => [{ id, prompt, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
     setActiveId(id);
     try {
       const items = await suggest(prompt, null, fit.items.map((i) => i.name), (partial) =>
-        patchHistory(id, { options: partial, loading: false }), modelsRef.current);
+        patchHistory(id, { options: partial, loading: false }), modelsRef.current,
+      (note) => setSearchNote({ id, ...note }));
       patchHistory(id, { options: items, loading: false });
     } catch {
       patchHistory(id, { loading: false, error: 'couldn’t find that — try again' });
@@ -337,7 +347,13 @@ export default function HaulCreator() {
             onToggleFavMode={toggleFavMode}
           />
         )}
-        <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
+        <PromptBar
+          onSubmit={find}
+          busy={Boolean(active?.loading)}
+          notice={searchNote}
+          onShowClosest={showClosest}
+          onDismissNotice={() => setSearchNote(null)}
+        />
       </footer>
     </main>
   );

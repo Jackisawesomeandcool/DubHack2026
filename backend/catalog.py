@@ -191,6 +191,34 @@ def candidates(intent_: Intent, models: bool, exclude: list[str]) -> list[dict]:
     return [_row_to_item(r, models) for r in _rows(intent_) if r["name"].lower() not in ex]
 
 
+def closest(intent_: Intent, n: int = 3, models: bool = False, exclude: list[str] | None = None) -> list[dict]:
+    """When nothing fits the budget: the in-stock products that match everything else, nearest in price
+    to the budget first (just above a maximum, just below a minimum). One per product name."""
+    lo, hi = intent_.price_min, intent_.price_max
+    ex = {x.lower() for x in (exclude or [])}
+    scored = []
+    for r in _rows(intent_, ignore_price=True):
+        price = r["price"] or 0
+        if price <= 0 or r["name"].lower() in ex:
+            continue
+        gap = (price - hi) if hi is not None and price > hi else (lo - price) if lo is not None and price < lo else None
+        if gap is not None:
+            scored.append((gap, price, r))
+    words = intent_.term_words()
+    on_topic = [t for t in scored if _score(t[2], words) > 0] if words else scored
+    scored = on_topic or scored          # prefer the garment the user named ("hoodie"); else anything in the category
+    scored.sort(key=lambda t: (t[0], t[1]))
+    out, seen = [], set()
+    for _, _, r in scored:
+        if r["name"].lower() in seen:
+            continue
+        seen.add(r["name"].lower())
+        out.append(_row_to_item(r, models))
+        if len(out) >= n:
+            break
+    return out
+
+
 def floor_price(intent_: Intent) -> float | None:
     """Cheapest in-stock price among items matching everything except the price — for 'cheapest is $X'."""
     prices = [r["price"] for r in _rows(intent_, ignore_price=True) if (r["price"] or 0) > 0]

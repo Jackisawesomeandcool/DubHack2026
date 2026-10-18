@@ -1,13 +1,15 @@
 """Search orchestration — catalog only, streamed as NDJSON events:
 
     {"items": [...]}       finished products (every catalog product already has its cutout)
-    {"reason": "..."}      only when items is empty: why, e.g. "No shoes under $50 — cheapest is $55"
+    {"reason": "...", "closest": [items]}
+                           only when items is empty: why, e.g. "No shoes under $50 — closest is $55", plus the
+                           products nearest the budget (the frontend offers them behind a "Show closest" button)
     {"done": true}
 
 The `append` / `image` / `drop` events of the old live-search flow are no
 longer emitted; the frontend still understands them, so nothing breaks there.
 The `reason` event is new and additive — today's frontend ignores it and shows
-its own "no alternatives found" line; a later UI can display the sentence.
+its own "no alternatives found" line; the search bar now displays the sentence and the closest items.
 
     prompt ──intent.parse──▶ hard constraints (price, category, brand, color)
            ──catalog.candidates──▶ every product within them
@@ -30,21 +32,26 @@ COUNT = 6
 
 
 class NoMatch(Exception):
-    """Nothing in the catalog satisfies the request; str(err) is the reason to show."""
+    """Nothing in the catalog satisfies the request; str(err) is the reason to show.
+    `closest` holds the nearest-priced products when the budget is what ruled everything out."""
+
+    def __init__(self, reason: str, closest: list[dict] | None = None):
+        super().__init__(reason)
+        self.closest = closest or []
 
 
-def _reason(it: intent_mod.Intent) -> str:
+def _reason(it: intent_mod.Intent, near: list[dict] | None = None) -> str:
     what = "/".join(it.categories) if it.categories else "items"
     if it.brands:
         what = f"{'/'.join(it.brands)} {what}"
     if it.colors:
         what = f"{'/'.join(it.colors)} {what}"
     if it.price_max is not None:
-        floor = catalog.floor_price(it)
-        tail = f" — cheapest is ${floor:,.0f}" if floor else ""
+        tail = f" — the closest is ${near[0]['price']:,.0f}" if near else ""
         return f"No {what} under ${it.price_max:,.0f}{tail}"
     if it.price_min is not None:
-        return f"No {what} over ${it.price_min:,.0f}"
+        tail = f" — the closest is ${near[0]['price']:,.0f}" if near else ""
+        return f"No {what} over ${it.price_min:,.0f}{tail}"
     if it.brands or it.colors or it.categories:
         return f"No {what} in the catalog"
     return f"Nothing in the catalog matches \"{it.raw.strip()}\""
@@ -75,9 +82,10 @@ def results(prompt: str, category: str | None = None, exclude: list[str] | None 
 
     pool = _dedupe(catalog.candidates(it, models, exclude))
     if not pool:
-        reason = _reason(it)
+        near = catalog.closest(it, 3, models, exclude) if (it.price_max is not None or it.price_min is not None) else []
+        reason = _reason(it, near)
         print(f"[finder] {it.describe()} · 0 candidates · {reason}", file=sys.stderr)
-        raise NoMatch(reason)
+        raise NoMatch(reason, near)
 
     picked, source = ranker.rank(prompt, it, pool, count, models, exclude)
     picked = _dedupe(picked)
@@ -97,7 +105,7 @@ def stream(prompt: str, category: str | None = None, exclude: list[str] | None =
         items = results(prompt, category, exclude, models, count)
     except NoMatch as err:
         yield {"items": []}
-        yield {"reason": str(err)}
+        yield {"reason": str(err), "closest": err.closest}
         yield {"done": True}
         return
     yield {"items": items}

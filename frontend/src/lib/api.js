@@ -13,8 +13,9 @@ async function request(path, options) {
 // Streams product options for a request. `onUpdate(items)` is called with the
 // current list every time something changes: first the products (no images),
 // then as each cutout arrives (items without a usable photo are removed).
-// Resolves with the final list.
-export async function suggest(prompt, category, exclude, onUpdate, models = false) {
+// Resolves with the final list. `onNote({ reason, closest })` fires when nothing matched:
+// why (e.g. "No shoes under $30 — the closest is $35") and the nearest products to offer instead.
+export async function suggest(prompt, category, exclude, onUpdate, models = false, onNote) {
   const res = await fetch('/api/suggest', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -32,6 +33,7 @@ export async function suggest(prompt, category, exclude, onUpdate, models = fals
     else if (ev.append) items = [...items, ...ev.append.map((i) => ({ ...i, pending: true }))]; // live: photos follow
     else if (ev.image) items[ev.index] = { ...items[ev.index], image: ev.image, pending: false };
     else if (ev.drop) items[ev.index] = { ...items[ev.index], dropped: true };
+    else if (ev.reason) onNote?.({ reason: ev.reason, closest: Array.isArray(ev.closest) ? ev.closest : [] });
     emit();
   };
 

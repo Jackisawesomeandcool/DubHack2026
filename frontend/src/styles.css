@@ -1276,3 +1276,41 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   transition-duration: 320ms;
   transition-timing-function: ease;
 }
+
+/* ------------------------------------------------------------------ "no such listing" note above the search bar */
+.prompt__notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(760px, 100%);
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--line);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  animation: popIn 180ms var(--ease);
+}
+.prompt__notice-text { min-width: 0; }
+.prompt__notice-go {
+  flex: none;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  transition: transform var(--fast) var(--ease);
+}
+.prompt__notice-go:hover { transform: translateY(-1px); }
+.prompt__notice-x {
+  flex: none;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink-3);
+}
+.prompt__notice-x:hover { background: var(--hover); color: var(--ink); }

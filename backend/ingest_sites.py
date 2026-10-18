@@ -8,6 +8,8 @@
 Sites
   stussy  Shopify store: https://www.stussy.com/products.json (paged). Real per-size
           availability, so only products with at least one size in stock are kept.
+  brandy  Brandy Melville US, also a Shopify store (https://us.brandymelville.com/products.json). Women's
+          tops, tanks, bottoms, skirts and sweats; dresses/rompers are skipped (no category for them yet).
   uniqlo  Uniqlo US search feed (unofficial JSON the website itself uses). Pulled
           per search term; kids/baby skipped unless --kids.
 
@@ -38,6 +40,7 @@ import images
 from products import CATEGORIES
 
 STUSSY_FEED = "https://www.stussy.com/products.json?limit=250&page={page}"
+BRANDY_FEED = "https://us.brandymelville.com/products.json?limit=250&page={page}"
 UNIQLO_FEED = "https://www.uniqlo.com/us/api/commerce/v5/en/products?path=&q={q}&limit=36&offset={offset}"
 UNIQLO_TERMS = [
     "hoodie", "sweatshirt", "t-shirt", "long sleeve t-shirt", "shirt", "overshirt", "sweater", "cardigan",
@@ -54,17 +57,18 @@ RULES = [
     ("outerwear", ["jacket", "jackets", "coat", "coats", "parka", "parkas", "anorak", "windbreaker", "puffer", "vest", "vests",
                    "blazer", "gilet", "poncho", "shell", "bomber", "overcoat", "trench"]),
     ("bottom", ["pants", "pant", "jeans", "jean", "trousers", "trouser", "shorts", "chinos", "chino", "cargo", "cargos",
-                "joggers", "sweatpants", "leggings", "skirt", "denim", "overalls"]),
+                "joggers", "sweatpants", "leggings", "skirt", "skirts", "skort", "sweats", "denim", "overalls"]),
     ("top", ["t shirt", "tee", "tees", "shirt", "shirts", "hoodie", "hoodies", "sweatshirt", "sweatshirts", "crewneck", "crew",
              "sweater", "sweaters", "cardigan", "knit", "polo", "tank", "henley", "longsleeve", "long sleeve", "pullover",
-             "top", "turtleneck", "zip"]),
+             "top", "turtleneck", "zip", "cami", "camisole", "bodysuit", "blouse", "halter", "corset", "tube", "babydoll"]),
     ("bottom", ["short"]),  # singular only after "top" so "Short Sleeve Tee" stays a top
     ("accessory", ["belt", "scarf", "gloves", "glove", "sunglasses", "keychain", "bandana", "jewelry"]),
 ]
 TYPE_MAP = {
     "outerwear": "outerwear", "tops": "top", "bottoms": "bottom", "bags": "bag", "headwear": "headwear", "hats": "headwear",
     "footwear": "shoes", "knits": "top", "shirts": "top", "tees": "top", "t-shirts": "top", "sweatshirts": "top",
-    "fleece": "top", "denim": "bottom", "pants": "bottom", "shorts": "bottom", "socks": "accessory",
+    "fleece": "top", "denim": "bottom", "tanks": "top", "sweatpants": "bottom", "skirts": "bottom", "sweaters": "top",
+    "cardigans": "top", "jackets": "outerwear", "coats": "outerwear", "jeans": "bottom", "pants": "bottom", "shorts": "bottom", "socks": "accessory",
 }
 
 
@@ -128,6 +132,50 @@ def stussy_all(max_pages: int = 8) -> list[dict]:
 
 
 # ---------------------------------------------------------------- Uniqlo
+# ---------------------------------------------------------------- Brandy Melville
+def brandy_item(p: dict) -> dict | None:
+    title = str(p.get("title") or "").strip()
+    variants = p.get("variants") or []
+    if not title or not p.get("handle") or not any(v.get("available") for v in variants):
+        return None
+    prices = []
+    for v in variants:
+        try:
+            prices.append(float(v.get("price")))
+        except (TypeError, ValueError):
+            pass
+    if not prices or min(prices) <= 0:
+        return None
+    ptype = str(p.get("product_type") or "")
+    cat = classify(title) or classify(ptype) or TYPE_MAP.get(ptype.strip().lower())
+    if not cat or cat in ("shoes", "bag", "headwear", "accessory"):
+        return None                       # Brandy's jewelry/hair accessories aren't wanted; clothes only
+    imgs = [i.get("src") for i in (p.get("images") or []) if isinstance(i, dict) and i.get("src")]
+    if not imgs:
+        return None
+    return {
+        "name": title, "brand": "Brandy Melville", "price": min(prices),
+        "url": "https://us.brandymelville.com/products/" + str(p["handle"]), "category": cat,
+        "candidates": imgs[:6], "tags": f"women womens {ptype}".lower(),
+    }
+
+
+def brandy_all(max_pages: int = 8) -> list[dict]:
+    out = []
+    for page in range(1, max_pages + 1):
+        try:
+            data = http_json(BRANDY_FEED.format(page=page))
+        except Exception as err:  # noqa: BLE001
+            print(f"[brandy] feed page {page} failed: {err}", file=sys.stderr)
+            break
+        prods = data.get("products") or []
+        if not prods:
+            break
+        out += [it for it in (brandy_item(p) for p in prods) if it]
+        time.sleep(0.5)
+    return out
+
+
 def uniqlo_item(it: dict, term: str, kids: bool = False) -> dict | None:
     pid = it.get("productId")
     name = str(it.get("name") or "").strip()
@@ -280,14 +328,14 @@ def main() -> None:
     bad = cats - set(CATEGORIES)
     if bad:
         sys.exit(f"Unknown categories {sorted(bad)}; choose from {list(CATEGORIES)}")
-    unknown = [x for x in sites if x not in ("stussy", "uniqlo")]
+    unknown = [x for x in sites if x not in ("stussy", "uniqlo", "brandy")]
     if unknown:
-        sys.exit(f"Unknown site(s) {unknown}. This script does stussy and uniqlo; Nike is ingest_sitemap.py "
+        sys.exit(f"Unknown site(s) {unknown}. This script does stussy, uniqlo and brandy; Nike is ingest_sitemap.py "
                  "(same --categories / --per-category flags).")
     skipped = _load_skipped()
     plan: list[dict] = []
     for site in sites:
-        rows = stussy_all() if site == "stussy" else uniqlo_all(pages=args.uniqlo_pages, kids=args.kids) if site == "uniqlo" else []
+        rows = stussy_all() if site == "stussy" else brandy_all() if site == "brandy" else uniqlo_all(pages=args.uniqlo_pages, kids=args.kids) if site == "uniqlo" else []
         feed = len(rows)
         if cats:
             rows = [r for r in rows if r["category"] in cats]
