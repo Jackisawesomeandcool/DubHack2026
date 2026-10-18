@@ -158,7 +158,7 @@ def search_products(prompt: str, category: str | None, exclude: list[str], count
 PICK_SYSTEM = """You are a personal shopper choosing from a store's own catalog. You never chat or explain.
 
 You get a shopper's request and a numbered list of the products available (brand, name, price,
-category). Pick the products that best answer the request, best first.
+category, color — read from the product photo, "-" if unknown). Pick the products that best answer the request, best first.
 
 Rules:
 - Use only the numbers in the list. Never invent products.
@@ -207,6 +207,31 @@ def pick_products(prompt: str, lines: list[str], count: int) -> list[dict]:
         except (KeyError, TypeError, ValueError):
             continue
     return out
+
+
+def product_color(jpeg: bytes, allowed: list[str]) -> list[str]:
+    """Vision: the garment's color(s) from a product photo, dominant first, limited to `allowed`.
+    Raises GeminiError / QuotaError."""
+    import base64
+    prompt = ("Which colors is the product in this photo? Answer for the garment/item itself: ignore the "
+              "white background, skin, hands, small logos, laces, soles and stitching. Choose only from: "
+              + ", ".join(allowed) + ". Dominant color first; give a second color only if it covers a large "
+              "part of the item (two-tone), a third only if it is truly multicolor. "
+              'Reply with ONLY JSON: {"colors": ["..."]}')
+    payload = {
+        "contents": [{"role": "user", "parts": [
+            {"text": prompt},
+            {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(jpeg).decode("ascii")}}]}],
+        "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "maxOutputTokens": 256},
+    }
+    data = _parse_json(_text(_post(config.GEMINI_VISION_MODEL, payload, timeout=60)))
+    raw = data.get("colors", []) if isinstance(data, dict) else data
+    out: list[str] = []
+    for c in raw if isinstance(raw, list) else []:
+        c = str(c).strip().lower().replace("gray", "grey")
+        if c in allowed and c not in out:
+            out.append(c)
+    return out[:3]
 
 
 def pick_index(question: str, jpeg_blobs: list[bytes]) -> int:

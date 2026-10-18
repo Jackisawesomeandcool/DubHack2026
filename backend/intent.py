@@ -157,9 +157,14 @@ def _norm(s: str) -> str:
 
 
 def item_colors(item: dict) -> set[str]:
-    """Canonical colors mentioned in an item's name / tags."""
-    words = set(_WORD.findall(f"{item.get('name', '')} {item.get('tags', '')}".lower()))
-    return {COLOR_WORD[w] for w in words if w in COLOR_WORD}
+    """Canonical colors of an item. Once colors.py has read the product image (`color` field), the
+    colors are the picture's plus any the name states; tags are ignored then, because they can list
+    every colorway the product comes in (Uniqlo) while the cutout shows only one. Until the image has
+    been read, the name and tags decide."""
+    own = {c for c in (item.get("color") or "").split() if c in COLORS}
+    text = item.get("name", "") if own else f"{item.get('name', '')} {item.get('tags', '')}"
+    words = set(_WORD.findall(text.lower()))
+    return own | {COLOR_WORD[w] for w in words if w in COLOR_WORD}
 
 
 def matches(item: dict, intent: Intent) -> bool:

@@ -56,7 +56,8 @@ def _db() -> sqlite3.Connection:
                 category TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '',
                 cutout_p TEXT, cutout_m TEXT,
                 stock TEXT NOT NULL DEFAULT 'in_stock',
-                source TEXT, last_checked REAL, added_at REAL
+                source TEXT, last_checked REAL, added_at REAL,
+                color TEXT, color_src TEXT      -- canonical colors, dominant first ("green", "black white"); see colors.py
             );
             CREATE INDEX IF NOT EXISTS idx_products_cat ON products(category);
             CREATE TABLE IF NOT EXISTS results (
@@ -69,6 +70,11 @@ def _db() -> sqlite3.Connection:
                 url TEXT PRIMARY KEY, at REAL NOT NULL
             );
         """)
+        have = {r[1] for r in _conn.execute("PRAGMA table_info(products)")}
+        for col in ("color", "color_src"):             # databases created before the color columns
+            if col not in have:
+                _conn.execute(f"ALTER TABLE products ADD COLUMN {col} TEXT")
+        _conn.commit()
     return _conn
 
 
@@ -76,7 +82,7 @@ def _row_to_item(r: sqlite3.Row, models: bool) -> dict:
     return {
         "name": r["name"], "brand": r["brand"], "price": r["price"], "url": r["url"],
         "image": (r["cutout_m"] if models else r["cutout_p"]) or r["cutout_p"] or r["cutout_m"] or "",
-        "stock": r["stock"], "category": r["category"],
+        "stock": r["stock"], "category": r["category"], "color": r["color"] or "",
     }
 
 
@@ -118,6 +124,20 @@ def is_blocked(url: str) -> bool:
         return _db().execute("SELECT 1 FROM blocked WHERE url=?", (url,)).fetchone() is not None
 
 
+def set_color(url: str, colors: list[str], src: str) -> None:
+    """Record a product's colors (canonical names, dominant first) and where they came from."""
+    with _lock:
+        _db().execute("UPDATE products SET color=?, color_src=? WHERE url=?", (" ".join(colors), src, url))
+        _db().commit()
+
+
+def clear_results() -> None:
+    """Forget cached searches (call after bulk changes that alter what a search would return)."""
+    with _lock:
+        _db().execute("DELETE FROM results")
+        _db().commit()
+
+
 def set_stock(url: str, stock: str) -> None:
     with _lock:
         _db().execute("UPDATE products SET stock=?, last_checked=? WHERE url=?", (stock, time.time(), url))
@@ -133,7 +153,7 @@ def cache_results(intent_: Intent, models: bool, items: list[dict]) -> None:
 
 
 # ---------------------------------------------------------------- read
-KEY_VERSION = "v2"   # bump when the key format changes; old rows simply never match again
+KEY_VERSION = "v3"   # bump when the key format changes; old rows simply never match again
 
 
 def _result_key(intent_: Intent, models: bool) -> str:

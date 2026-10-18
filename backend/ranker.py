@@ -2,7 +2,7 @@
 
 Given the shopper's request and the catalog products that survive the hard
 filters (intent.py), the LLM chooses and orders the best matches. It sees
-compact lines — number, brand, name, price, category — and returns numbers,
+compact lines — number, brand, name, price, category, color — and returns numbers,
 so it can only pick real products; every pick is re-checked against the hard
 filters afterwards. No LLM key (or an LLM error) → keyword ranking instead.
 
@@ -23,7 +23,7 @@ MAX_CANDIDATES = 600     # ~15 tokens per line; well inside any current model's 
 
 def _line(n: int, it: dict) -> str:
     price = f"${it['price']:.0f}" if it.get("price") else "price n/a"
-    return f"{n} | {it['brand']} | {it['name']} | {price} | {it['category']}"
+    return f"{n} | {it['brand']} | {it['name']} | {price} | {it['category']} | {it.get('color') or '-'}"
 
 
 def _trim(it: Intent, pool: list[dict], models: bool, exclude: list[str]) -> list[dict]:
