@@ -155,6 +155,43 @@ def search_products(prompt: str, category: str | None, exclude: list[str], count
     return items
 
 
+PICK_SYSTEM = """You are a personal shopper choosing from a store's own catalog. You never chat or explain.
+
+You get a shopper's request and a numbered list of the products available (brand, name, price,
+category). Pick the products that best answer the request, best first.
+
+Rules:
+- Use only the numbers in the list. Never invent products.
+- Judge by what the names tell you: product line, garment type, material (fleece, down, shell,
+  denim, corduroy), fit, season cues (therma, windrunner, puffer = cold; shorts, tank = warm),
+  colorway words, sport, and brand style (Stüssy = streetwear, Uniqlo = basics, Nike = athletic).
+- If the request describes a whole outfit or "fit", pick a coherent mix across categories (one
+  top, one bottom, shoes, plus outerwear/headwear/bag if they fit) rather than six of one kind.
+- Otherwise pick the closest matches; vary models rather than listing near-duplicates.
+- Pick fewer than asked if fewer truly fit. Pick none if nothing fits.
+Reply with ONLY a JSON object: {"picks": [{"n": <number>, "why": "<one short line>"}]}"""
+
+
+def pick_products(prompt: str, lines: list[str], count: int) -> list[dict]:
+    """Rank the catalog candidates for a request. `lines` are "n | brand | name | $price | category".
+    Returns [{"n": int, "why": str}] best first. Raises GeminiError."""
+    user = (f"Request: {prompt}\nPick up to {count}.\n\nProducts:\n" + "\n".join(lines))
+    payload = {
+        "systemInstruction": {"parts": [{"text": PICK_SYSTEM}]},
+        "contents": [{"role": "user", "parts": [{"text": user}]}],
+        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
+    }
+    data = _parse_json(_text(_post(config.GEMINI_MODEL, payload, timeout=45)))
+    picks = data.get("picks", []) if isinstance(data, dict) else data
+    out = []
+    for p in picks if isinstance(picks, list) else []:
+        try:
+            out.append({"n": int(p["n"] if isinstance(p, dict) else p), "why": str(p.get("why", "") if isinstance(p, dict) else "")[:160]})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
 def pick_index(question: str, jpeg_blobs: list[bytes]) -> int:
     """Vision: which photo answers the question. Returns an index or -1."""
     import base64

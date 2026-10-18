@@ -185,6 +185,33 @@ def search_products(prompt: str, category: str | None = None, exclude: list[str]
     return items
 
 
+PICK_SCHEMA = {
+    "type": "object",
+    "properties": {"picks": {"type": "array", "items": {
+        "type": "object", "properties": {"n": {"type": "integer"}, "why": {"type": "string"}},
+        "required": ["n", "why"], "additionalProperties": False}}},
+    "required": ["picks"], "additionalProperties": False,
+}
+
+
+def pick_products(prompt: str, lines: list[str], count: int) -> list[dict]:
+    """Rank the catalog candidates for a request (same contract as gemini.pick_products)."""
+    import gemini  # the system prompt is provider-neutral; keep one copy
+    user = f"Request: {prompt}\nPick up to {count}.\n\nProducts:\n" + "\n".join(lines)
+    payload = {
+        "model": config.XAI_MODEL,
+        "messages": [{"role": "system", "content": gemini.PICK_SYSTEM}, {"role": "user", "content": user}],
+        "response_format": {"type": "json_schema", "json_schema": {"name": "picks", "schema": PICK_SCHEMA, "strict": True}},
+        "temperature": 0.2,
+    }
+    data = _post("/chat/completions", payload, timeout=45)
+    try:
+        picks = json.loads(data["choices"][0]["message"]["content"]).get("picks", [])
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as err:
+        raise GrokError("Unexpected xAI response shape") from err
+    return [{"n": int(p["n"]), "why": str(p.get("why", ""))[:160]} for p in picks if isinstance(p, dict) and "n" in p]
+
+
 def pick_index(question: str, jpeg_blobs: list[bytes]) -> int:
     """Vision via xAI chat completions (images as base64)."""
     import base64

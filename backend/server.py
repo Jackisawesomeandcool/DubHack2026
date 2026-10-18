@@ -73,7 +73,8 @@ class Handler(BaseHTTPRequestHandler):
         return data if isinstance(data, dict) else None
 
     def _stream_suggest(self, prompt, category, exclude, models=False):
-        """NDJSON stream: products first, then one line per finished cutout."""
+        """NDJSON stream: {"items": [...]} then {"done": true}; an empty items list
+        comes with a {"reason": "..."} event saying why (e.g. nothing under the budget)."""
         try:
             gen = finder.stream(prompt, category, exclude, models)
             first = next(gen)
@@ -276,14 +277,14 @@ def quality_sweep() -> None:
 def main() -> None:
     import gsearch
     live = [n for n, on in (("google", gsearch.configured()), ("web", config.WEB_SEARCH), (llm.provider(), llm.configured())) if on]
-    mode = f"catalog + seed{' + ' + ' + '.join(live) if live else ' (no live search)'} · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}"
+    ranker_name = llm.provider() if llm.configured() else "keywords (set GEMINI_API_KEY for AI picks)"
+    mode = f"catalog search · ranked by {ranker_name}{' · live ingest: ' + ', '.join(live) if live else ''}"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
     print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER}")
     cutouts.warm()
     seed.warm()
     quality_sweep()
-    if gsearch.configured() or config.WEB_SEARCH or llm.configured():
-        catalog.warm(lambda term, models: finder.find(term, models, local_first=False))
+    # (no catalog warm-up: search is catalog-only, nothing to pre-fetch)
     stock.start()
     fits.ensure_pool()
     ThreadingHTTPServer((config.HOST, config.PORT), Handler).serve_forever()

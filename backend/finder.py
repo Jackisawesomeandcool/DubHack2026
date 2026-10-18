@@ -1,141 +1,113 @@
-"""Search orchestration, fastest source first, streamed as NDJSON events:
+"""Search orchestration — catalog only, streamed as NDJSON events:
 
-    {"items": [...]}                 catalog hits — finished, with cutouts (instant)
-    {"append": [...]}                live products found (no images yet)
-    {"index": i, "image": "..."}     cutout ready for item i (index into the full list)
-    {"index": i, "drop": true}       no suitable photo; drop item i
+    {"items": [...]}       finished products (every catalog product already has its cutout)
+    {"reason": "..."}      only when items is empty: why, e.g. "No shoes under $50 — cheapest is $55"
     {"done": true}
 
-Sources: local catalog → nike.com search API → Grok web search.
-Everything that finishes with a cutout is added to the catalog.
+The `append` / `image` / `drop` events of the old live-search flow are no
+longer emitted; the frontend still understands them, so nothing breaks there.
+The `reason` event is new and additive — today's frontend ignores it and shows
+its own "no alternatives found" line; a later UI can display the sentence.
+
+    prompt ──intent.parse──▶ hard constraints (price, category, brand, color)
+           ──catalog.candidates──▶ every product within them
+           ──ranker.rank──▶ the AI picks the best `count` for the request
+                            (keyword ranking when no AI key is configured)
+
+`results()` raises NoMatch with the human-readable reason; `stream()` turns
+that into the empty-items + reason events (HTTP 200). Results are cached for
+an hour per *parsed* intent, so phrasing variants share the cache.
 """
 
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import catalog
-import config
-import cutouts
-import gsearch
-import llm
-import nike
-import websearch
-from products import normalize_list
+import intent as intent_mod
+import ranker
 
-LIVE_COUNT = 6
+COUNT = 6
 
 
-def _same(a: dict, b: dict) -> bool:
-    return a.get("name", "").lower() == b.get("name", "").lower()
+class NoMatch(Exception):
+    """Nothing in the catalog satisfies the request; str(err) is the reason to show."""
 
 
-def _live(prompt: str, category: str | None, exclude: list[str], count: int) -> tuple[list[dict], str]:
-    """Products from the fastest live source that answers."""
+def _reason(it: intent_mod.Intent) -> str:
+    what = "/".join(it.categories) if it.categories else "items"
+    if it.brands:
+        what = f"{'/'.join(it.brands)} {what}"
+    if it.colors:
+        what = f"{'/'.join(it.colors)} {what}"
+    if it.price_max is not None:
+        floor = catalog.floor_price(it)
+        tail = f" — cheapest is ${floor:,.0f}" if floor else ""
+        return f"No {what} under ${it.price_max:,.0f}{tail}"
+    if it.price_min is not None:
+        return f"No {what} over ${it.price_min:,.0f}"
+    if it.brands or it.colors or it.categories:
+        return f"No {what} in the catalog"
+    return f"Nothing in the catalog matches \"{it.raw.strip()}\""
+
+
+def _dedupe(items: list[dict]) -> list[dict]:
+    """One entry per product name (the dataset has several colorways of some products)."""
+    seen, out = set(), []
+    for i in items:
+        k = i["name"].lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(i)
+    return out
+
+
+def results(prompt: str, category: str | None = None, exclude: list[str] | None = None,
+            models: bool = False, count: int = COUNT) -> list[dict]:
+    """Finished products for a request (all from the catalog). Raises NoMatch."""
+    exclude = exclude or []
     t0 = time.time()
-    items = nike.search(prompt, count=max(12, count * 2))
-    if items:
-        items = normalize_list(items)
-        if category:
-            items = [i for i in items if i["category"] == category] or items
-        ex = {n.lower() for n in exclude}
-        items = [i for i in items if i["name"].lower() not in ex][:count]
-        if items:
-            print(f"[finder] nike.com search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
-            return items, "nike"
-    if gsearch.configured():
-        items = normalize_list(gsearch.search(prompt, category, exclude, count))
-        if items:
-            print(f"[finder] google search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
-            return items, "google"
-    if config.WEB_SEARCH:
-        items = normalize_list(websearch.search(prompt, category, exclude, count))
-        if items:
-            print(f"[finder] web search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
-            return items, "web"
-    if not llm.configured():
-        raise llm.LLMError("no more matches in the catalog (no live search configured)")
-    items = llm.search_products(prompt, category, exclude, count)
-    print(f"[finder] {llm.provider()} search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
-    return items, llm.provider()
+    it = intent_mod.parse(prompt, category)
+
+    cached = catalog.cached_results(it, models, exclude)
+    if cached:
+        print(f"[finder] {it.describe()} · cache hit {1000 * (time.time() - t0):.0f}ms · {len(cached)} items", file=sys.stderr)
+        return cached[:count]
+
+    pool = _dedupe(catalog.candidates(it, models, exclude))
+    if not pool:
+        reason = _reason(it)
+        print(f"[finder] {it.describe()} · 0 candidates · {reason}", file=sys.stderr)
+        raise NoMatch(reason)
+
+    picked, source = ranker.rank(prompt, it, pool, count, models, exclude)
+    picked = _dedupe(picked)
+    print(f"[finder] {it.describe()} · {len(pool)} candidates → {len(picked)} via {source} · {1000 * (time.time() - t0):.0f}ms",
+          file=sys.stderr)
+    if not picked:
+        raise NoMatch(f"Nothing in the catalog matches \"{prompt.strip()}\"")
+    catalog.cache_results(it, models, picked)
+    return picked
 
 
 def stream(prompt: str, category: str | None = None, exclude: list[str] | None = None,
-           models: bool = False, count: int = LIVE_COUNT, local_first: bool = True):
-    exclude = exclude or []
-    have: list[dict] = []
-    t0 = time.time()
-
-    if local_first:
-        # 1. Identical recent search → its products, instantly.
-        cached = catalog.cached_results(prompt, category, models, exclude)
-        if cached:
-            print(f"[finder] result cache hit {1000 * (time.time() - t0):.0f}ms · {len(cached)} items · live skipped", file=sys.stderr)
-            yield {"items": cached[:count]}
-            yield {"done": True}
-            return
-        # 2. Keyword/tag match against the catalog.
-        hits = catalog.search(prompt, category, models, exclude, limit=count)
-        if hits:
-            have.extend(hits)
-            yield {"items": hits}
-        print(f"[finder] catalog {1000 * (time.time() - t0):.0f}ms · {len(hits)} hits", file=sys.stderr)
-
-    want = count - len(have) + (2 if have else 0)
-    if want <= 0 and have:
-        catalog.cache_results(prompt, category, models, have)
-        print(f"[finder] served from catalog · live skipped", file=sys.stderr)
-        yield {"done": True}
-        return
-
+           models: bool = False, count: int = COUNT, local_first: bool = True):
+    """NDJSON event generator for /api/suggest. `local_first` is accepted for
+    compatibility and ignored: everything is local now."""
     try:
-        live, source = _live(prompt, category, exclude + [h["name"] for h in have], want)
-    except llm.LLMError as err:
-        if have:
-            yield {"done": True}
-            return
-        raise
-    live = [i for i in live if not any(_same(i, h) for h in have)]
-    if not live:
+        items = results(prompt, category, exclude, models, count)
+    except NoMatch as err:
+        yield {"items": []}
+        yield {"reason": str(err)}
         yield {"done": True}
         return
-
-    base = len(have)
-    yield {"append": [{**i, "image": "", "image_product": None, "image_model": None} for i in live]}
-
-    t1 = time.time()
-    kept = []
-    with ThreadPoolExecutor(max_workers=min(4, len(live))) as pool:
-        futures = {pool.submit(cutouts.resolve, it, models): i for i, it in enumerate(live)}
-        for fut in as_completed(futures):
-            i = futures[fut]
-            try:
-                fut.result()
-            except Exception as err:  # noqa: BLE001
-                print(f"[cutouts] {err}", file=sys.stderr)
-                live[i]["image"] = ""
-            if live[i]["image"]:
-                kept.append(live[i])
-                yield {"index": base + i, "image": live[i]["image"]}
-            else:
-                yield {"index": base + i, "drop": True}
-    print(f"[finder] live {source}: search {t1 - t0:.1f}s · photos {time.time() - t1:.1f}s · {len(kept)}/{len(live)} cutouts · catalog hits {len(have)}", file=sys.stderr)
-    catalog.upsert(kept, models, prompt, source)
-    catalog.cache_results(prompt, category, models, have + kept)
+    yield {"items": items}
     yield {"done": True}
 
 
 def find(prompt: str, models: bool = False, category: str | None = None, exclude: list[str] | None = None,
-         count: int = LIVE_COUNT, local_first: bool = True) -> list[dict]:
-    """Non-streaming: finished products with cutouts."""
-    items: list[dict] = []
-    for ev in stream(prompt, category, exclude, models, count, local_first):
-        if "items" in ev:
-            items.extend(ev["items"])
-        elif "append" in ev:
-            items.extend(ev["append"])
-        elif "image" in ev:
-            items[ev["index"]]["image"] = ev["image"]
-        elif ev.get("drop"):
-            items[ev["index"]]["image"] = ""
-    return [i for i in items if i.get("image")]
+         count: int = COUNT, local_first: bool = True) -> list[dict]:
+    """Non-streaming variant (fits, warm-up). Empty list instead of NoMatch."""
+    try:
+        return results(prompt, category, exclude, models, count)
+    except NoMatch:
+        return []
