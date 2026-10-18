@@ -286,6 +286,23 @@ class Finder(unittest.TestCase):
         items = finder.results("comfortable shoes under 100 dollars")
         self.assertTrue(items and all(i["category"] == "shoes" and i["price"] <= 100 for i in items))
 
+    def test_brand_alone_returns_that_brand(self):
+        # Brand is a hard filter; names/tags need not repeat it (Uniqlo names never say "Uniqlo").
+        with catalog._lock:
+            catalog._db().execute("UPDATE products SET tags=REPLACE(REPLACE(tags,'uniqlo',''),'nike','')")
+            catalog._db().execute("DELETE FROM results")
+            catalog._db().commit()
+        try:
+            for q, brand in (("uniqlo", "Uniqlo"), ("Nike", "Nike"), ("stüssy", "Stüssy"), ("uniqlo under 40 dollars", "Uniqlo")):
+                with self.subTest(q=q):
+                    items = finder.results(q)
+                    self.assertTrue(items and all(i["brand"] == brand for i in items))
+            self.assertGreaterEqual(len({i["category"] for i in finder.results("uniqlo")}), 2, "a brand alone gives a mix")
+            with self.assertRaises(finder.NoMatch):
+                finder.results("adidas")
+        finally:
+            load_dataset()
+
     def test_gibberish_still_matches_nothing(self):
         with self.assertRaises(finder.NoMatch):
             finder.results("xyzzy qwerty")

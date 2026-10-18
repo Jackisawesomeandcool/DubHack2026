@@ -94,6 +94,8 @@ COLOR_WORD = {w: c for c, ws in COLORS.items() for w in ws}
 BRANDS = {"nike", "jordan", "stussy", "uniqlo", "adidas", "puma", "new balance", "asics", "reebok",
           "converse", "vans", "under armour", "lululemon", "patagonia", "north face", "carhartt", "levis", "zara"}
 
+_BRAND_WORDS = {w for b in BRANDS for w in b.split()} | {"stüssy", "levi"}   # single words of the brand names
+
 # words that signal a constraint; stripped from the search terms
 _CONSTRAINT_WORDS = {"under", "below", "over", "above", "between", "around", "about", "within", "cheap", "cheaper",
                      "cheapest", "budget", "affordable", "inexpensive", "expensive", "than", "less", "more", "least", "most"}

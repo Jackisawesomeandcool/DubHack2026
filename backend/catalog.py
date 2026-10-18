@@ -333,10 +333,12 @@ def search(intent_: Intent, models: bool, exclude: list[str], limit: int = 6) ->
         # A mood or season ("comfortable", "fall athletic"): no product name says so, so match the words
         # that suggest it (fleece, therma, dri-fit…) and mix categories like an outfit.
         scored = _vibe_scored(pool, intent_.words())
-        if not scored and pool and any(w in intent_mod.VIBES for w in intent_.words()) and (
-                intent_.categories or intent_.has_filters()):
-            # "comfortable shoes under $100": no shoe name says "comfortable", but the category and budget
-            # are real constraints, so offer what satisfies them rather than nothing.
+        if not scored and pool and (intent_.categories or intent_.has_filters()) and all(
+                w in intent_mod.VIBES or w in _GENERIC or w in _SYN or w in intent_mod.COLOR_WORD
+                or w in intent_mod._BRAND_WORDS or w.isdigit() for w in intent_.words()):
+            # Every word typed is already a hard filter or a mood: "uniqlo", "nike shoes under 100",
+            # "comfortable shoes under $100". Nothing more to rank by; the pool IS the answer, so
+            # offer a mix of what satisfies the filters rather than nothing.
             scored = [(0.1, r) for r in pool]
         if scored:
             return [_row_to_item(r, models) for _, r in _diversify(scored, limit)]
