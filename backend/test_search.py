@@ -190,7 +190,8 @@ class StubLLM:
             raise llm.LLMError("stub down")
         out = []
         for ln in lines:
-            n, _, name, _, _ = [x.strip() for x in ln.split(" | ")]
+            parts = [x.strip() for x in ln.split(" | ")]
+            n, name = parts[0], " | ".join(parts[2:-2])     # names may contain ' | '
             if self.want in name.lower():
                 out.append({"n": int(n), "why": "stub"})
             if len(out) >= count:
@@ -266,6 +267,45 @@ class Finder(unittest.TestCase):
             items = finder.results("pants similar in style to Stüssy Junya Cargo Pants", "bottom", exclude=["Junya Cargo Pants"])
         self.assertTrue(items and all(i["category"] == "bottom" for i in items))
         self.assertTrue(any(i["brand"] != "Stüssy" for i in stub_pool(stub)), "swap pool is not brand-locked")
+
+    def test_mood_queries_return_mixed_results_without_llm(self):
+        for q in ("comfortable clothes", "fall athletic", "fall aesthetic", "cozy fall outfit"):
+            with self.subTest(q=q):
+                items = finder.results(q)
+                self.assertGreaterEqual(len(items), 4)
+                self.assertGreaterEqual(len({i["category"] for i in items}), 2, "a mood returns a mix, not one kind")
+
+    def test_fall_athletic_prefers_cold_weather_performance_pieces(self):
+        names = " ".join(i["name"].lower() for i in finder.results("fall athletic"))
+        self.assertTrue(any(w in names for w in ("therma", "fleece", "windrunner", "woven", "dri-fit")))
+
+    def test_mood_keeps_hard_filters(self):
+        items = finder.results("comfortable shoes under 100 dollars")
+        self.assertTrue(items and all(i["category"] == "shoes" and i["price"] <= 100 for i in items))
+
+    def test_gibberish_still_matches_nothing(self):
+        with self.assertRaises(finder.NoMatch):
+            finder.results("xyzzy qwerty")
+
+    def test_ai_empty_answer_falls_back_to_keywords(self):
+        with StubLLM(want="no-such-product-zzz") as stub:       # the AI returns no picks at all
+            items = finder.results("comfortable clothes")
+        self.assertEqual(len(stub.calls), 1)
+        self.assertTrue(items, "an empty AI answer must not produce an empty tray")
+
+    def test_ai_error_falls_back_to_keywords_for_moods(self):
+        with StubLLM(fail=True):
+            self.assertTrue(finder.results("fall athletic"))
+
+    def test_gemini_salvages_truncated_json(self):
+        import gemini
+        post, text = gemini._post, gemini._text
+        gemini._post = lambda *a, **k: {}
+        gemini._text = lambda _r: '{"picks": [{"n": 3, "why": "cozy"}, {"n": 7, "why": "soft fl'
+        try:
+            self.assertEqual([p["n"] for p in gemini.pick_products("cozy", ["1 | a | b | $1 | top"], 6)], [3, 7])
+        finally:
+            gemini._post, gemini._text = post, text
 
     def test_find_swallows_no_match(self):
         self.assertEqual(finder.find("shoes under 1 dollar"), [])

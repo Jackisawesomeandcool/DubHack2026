@@ -230,6 +230,46 @@ def _score(r: sqlite3.Row, term_words: list[list[str]], strict: bool = True) -> 
     return max((_score_term(r, ws, strict) for ws in term_words), default=0.0)
 
 
+def _vibe_scored(pool: list[sqlite3.Row], words: list[str]) -> list[tuple[float, sqlite3.Row]]:
+    """Score rows against mood words via intent.VIBES. Each query word that matches contributes; items that
+    satisfy more of the words ("fall" AND "athletic") rank higher. Words that are neither a mood nor on the
+    item contribute nothing, and a query with no mood word and no literal hit scores nothing at all."""
+    out = []
+    for r in pool:
+        have = {_stem(w) for w in _WORD.findall(r["name"].lower())} | {_stem(w) for w in (r["tags"] or "").split()}
+        brand = intent_mod._norm(r["brand"] or "")
+        score, mood = 0.0, False
+        for w in words:
+            exp = intent_mod.VIBES.get(w)
+            hits = len(have & exp) if exp else 0
+            if exp and (hits or brand in intent_mod.VIBE_BRANDS.get(w, ())):
+                score += 3 + 0.5 * min(hits, 3)
+                mood = True
+            elif _stem(w) in have:
+                score += 2          # a literal word only boosts; it never makes a match by itself
+        if mood:
+            out.append((score, r))
+    return out
+
+
+def _diversify(scored: list[tuple[float, sqlite3.Row]], limit: int) -> list[tuple[float, sqlite3.Row]]:
+    """Best-first but no more than two of one category until the others are used, one per product name."""
+    scored = sorted(scored, key=lambda t: (-t[0], -(t[1]["last_checked"] or 0)))
+    seen, per, first, rest = set(), {}, [], []
+    for t in scored:
+        name = t[1]["name"].lower()
+        if name in seen:
+            continue
+        seen.add(name)
+        cat = t[1]["category"]
+        if per.get(cat, 0) < 2:
+            per[cat] = per.get(cat, 0) + 1
+            first.append(t)
+        else:
+            rest.append(t)
+    return (first + rest)[:limit]
+
+
 def search(intent_: Intent, models: bool, exclude: list[str], limit: int = 6) -> list[dict]:
     """Keyword-ranked catalog hits within the hard filters. Used when no AI ranker is available
     (and by the ranker as a tie-break)."""
@@ -241,6 +281,17 @@ def search(intent_: Intent, models: bool, exclude: list[str], limit: int = 6) ->
         # A descriptive request ("skater fit with wide-leg pants and skate shoes"): no item carries
         # every word, so rank by how many it does carry. Hard filters still apply.
         scored = [(s, r) for r in pool for s in [_score(r, term_words, strict=False)] if s > 0]
+    if not scored:
+        # A mood or season ("comfortable", "fall athletic"): no product name says so, so match the words
+        # that suggest it (fleece, therma, dri-fit…) and mix categories like an outfit.
+        scored = _vibe_scored(pool, intent_.words())
+        if not scored and pool and any(w in intent_mod.VIBES for w in intent_.words()) and (
+                intent_.categories or intent_.has_filters()):
+            # "comfortable shoes under $100": no shoe name says "comfortable", but the category and budget
+            # are real constraints, so offer what satisfies them rather than nothing.
+            scored = [(0.1, r) for r in pool]
+        if scored:
+            return [_row_to_item(r, models) for _, r in _diversify(scored, limit)]
     if intent_.sort == "price_asc":
         scored.sort(key=lambda t: (t[1]["price"] or 1e9, -t[0]))
     else:
