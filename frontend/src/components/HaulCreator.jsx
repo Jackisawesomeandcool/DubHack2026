@@ -7,6 +7,7 @@ import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
+import TrendingPrompts from './TrendingPrompts.jsx';
 import Backdrop from './Backdrop.jsx';
 import AccountMenu from './AccountMenu.jsx';
 import { health, loadState, randomFit, saveState, saveStateBeacon, seen, suggest } from '../lib/api.js';
@@ -139,10 +140,10 @@ export default function HaulCreator() {
   const retry = () => !loadingFit && fit.items.length === 0 && loadRandom(current);
 
   // Running a search (the arrow button / Enter) brings the tray back to suggestions.
-  async function find(prompt) {
+  async function find(prompt, label = prompt) {
     if (favMode) toggleFavMode();
     const id = nextId.current++;
-    setHistory((prev) => [{ id, prompt, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
+    setHistory((prev) => [{ id, prompt: label, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
     setActiveId(id);
     try {
       const items = await suggest(prompt, null, fit.items.map((i) => i.name), (partial) =>
@@ -180,6 +181,13 @@ export default function HaulCreator() {
       setSwap((s) => (s && s.uid === item.uid ? { ...s, loading: false, error: favMode ? '' : 'couldn’t find alternatives' } : s));
     }
   }
+
+  // While the favorites list is showing, starring/unstarring updates it in place
+  // (newest first), including the ‹ › list of a swap in progress.
+  useEffect(() => {
+    if (!favMode) return;
+    setSwap((s) => (s ? { ...s, alts: favoritesFor(s.original), index: Math.min(s.index, favoritesFor(s.original).length - 1) } : s));
+  }, [favorites]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tray switch: suggestions <-> favorites. In a swap session the arrows then
   // cycle whichever list is showing; an unkept preview is dropped first.
@@ -335,9 +343,13 @@ export default function HaulCreator() {
             favMode={favMode}
             favCount={favorites.length}
             onToggleFavMode={toggleFavMode}
+            onUnfavorite={toggleFav}
           />
         )}
-        <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
+        <div className="dock__row">
+          <TrendingPrompts onPick={find} busy={Boolean(active?.loading)} />
+          <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
+        </div>
       </footer>
     </main>
   );
