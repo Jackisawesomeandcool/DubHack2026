@@ -1383,7 +1383,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   transition: transform var(--fast) var(--ease), box-shadow var(--fast);
 }
 .browse__card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.browse__card img { width: 80%; height: 82%; object-fit: contain; mix-blend-mode: multiply; pointer-events: none; }
+/* fixed px, not %: the card is a <button>, where % heights do not resolve */
+.browse__card img { width: 140px; height: 94px; object-fit: contain; mix-blend-mode: multiply; pointer-events: none; }
 .browse.is-spinning .browse__card img { filter: blur(1.5px); }
 .browse__price {
   position: absolute; left: 8px; bottom: 8px;

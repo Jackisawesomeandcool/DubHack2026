@@ -11,11 +11,14 @@ export default function FashionItem({ item, zIndex, selected, draggable, swapUi,
   const [failed, setFailed] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [outside, setOutside] = useState(false);
+  const [aspect, setAspect] = useState(1); // natural h/w of the cutout
   const drag = useRef(null);
 
   if (failed) return null; // never substitute a fake visual
 
-  const w = placeFor(item.category).w;
+  // Category width, shrunk for tall-and-thin photos (a bottle, a sock) so they
+  // take up a sensible area instead of towering over the clothes.
+  const w = placeFor(item.category).w * (aspect > 1.3 ? Math.max(0.45, 1.3 / aspect) : 1);
 
   function isOutside(e, rect) {
     return e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
@@ -72,7 +75,7 @@ export default function FashionItem({ item, zIndex, selected, draggable, swapUi,
       >
         <span className="item__price">{formatPrice(item.price)}</span>
         <span className="item__art">
-          <img key={item.image} src={item.image} alt="" draggable="false" onError={() => setFailed(true)} />
+          <img key={item.image} src={item.image} alt="" draggable="false" onError={() => setFailed(true)} onLoad={(e) => { const im = e.currentTarget; if (im.naturalWidth) setAspect(im.naturalHeight / im.naturalWidth); }} />
         </span>
       </button>
 
