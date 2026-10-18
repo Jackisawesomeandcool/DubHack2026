@@ -18,7 +18,7 @@ export default function FitSelector({ fits, current, onSelect, onAdd }) {
       ))}
       {onAdd && fits.length < MAX_FITS && (
         <button type="button" className="fits__tab fits__add" onClick={onAdd} aria-label="New fit">
-          + FIT
+          + New fit
         </button>
       )}
     </nav>

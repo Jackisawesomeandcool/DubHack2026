@@ -35,7 +35,7 @@ export default function PromptBar({ onSubmit, busy }) {
         type="text"
         value={value}
         maxLength={400}
-        placeholder="find a piece to swap in..."
+        placeholder="Find a piece to swap in… try “more 90s, under $150”"
         aria-label="Find a piece to swap in"
         onChange={onType}
         onBlur={stopTyping}

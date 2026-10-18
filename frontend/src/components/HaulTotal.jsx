@@ -17,7 +17,7 @@ export default function HaulTotal({ total }) {
   return (
     <div className="total" aria-live="polite">
       <span className={`total__value${anim.dir ? ` is-${anim.dir}` : ''}`} key={anim.n}>{formatPrice(total)}</span>
-      <span className="total__label">TOTAL</span>
+      <span className="total__label">total</span>
     </div>
   );
 }

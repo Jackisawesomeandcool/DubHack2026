@@ -58,7 +58,7 @@ export default function HaulCreator() {
     setHistory((prev) => [{ id, prompt, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
     setActiveId(id);
     try {
-      const { items } = await suggest(prompt, null, fit.items.map((i) => i.name));
+      const items = await suggest(prompt, null, fit.items.map((i) => i.name));
       patchHistory(id, { options: items, loading: false });
     } catch {
       patchHistory(id, { loading: false, error: 'couldn’t find that — try again' });
