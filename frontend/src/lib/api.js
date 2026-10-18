@@ -75,3 +75,25 @@ export function health() {
 export function randomFit(models = false) {
   return request(`/api/random-fit${models ? '?models=1' : ''}`);
 }
+
+// Signed-in users: favorites + haul boards live on the backend (users.sqlite).
+function authHeaders() {
+  try {
+    const t = JSON.parse(localStorage.getItem('haul:token') || 'null');
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  } catch { return {}; }
+}
+
+export async function loadState() {
+  const res = await fetch('/api/me/state', { headers: authHeaders() });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export function saveState(favorites, hauls) {
+  return fetch('/api/me/state', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ favorites, hauls }),
+  }).catch(() => {});
+}

@@ -8,8 +8,9 @@ import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import Backdrop from './Backdrop.jsx';
 import AccountMenu from './AccountMenu.jsx';
-import { health, randomFit, seen, suggest } from '../lib/api.js';
-import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
+import { health, loadState, randomFit, saveState, seen, suggest } from '../lib/api.js';
+import { loadUser, token } from '../lib/session.js';
+import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, exportFits, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
 import { isFavorite, loadFavorites, saveFavorites, toggleFavorite } from '../lib/favorites.js';
 
 const MAX_HISTORY = 7;
@@ -45,6 +46,18 @@ export default function HaulCreator() {
     saveFavorites(next);
   }
 
+  // Signed in: favorites and haul boards are saved to the account (debounced)
+  // and restored on the next visit. Guests keep theirs in this browser only.
+  const signedIn = Boolean(loadUser() && token());
+  const restored = useRef(false); // true once the account's saved state has been applied
+  const saveTimer = useRef(null);
+  useEffect(() => {
+    if (!signedIn || !restored.current) return undefined;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveState(favorites, exportFits(fits)), 600);
+    return () => clearTimeout(saveTimer.current);
+  }, [fits, favorites, signedIn]);
+
   // Swap session for the selected piece: alternatives are previewed on the
   // board and only kept when the user says so. `found` keeps the search
   // results while the tray is switched to favorites.
@@ -78,7 +91,23 @@ export default function HaulCreator() {
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
-    loadRandom(0);
+    (async () => {
+      if (signedIn) {
+        const saved = await loadState().catch(() => null);
+        if (saved) {
+          if (saved.favorites.length) { setFavorites(saved.favorites); saveFavorites(saved.favorites); }
+          const hauls = saved.hauls.filter((h) => h.items.length);
+          if (hauls.length) {
+            setFits(hauls.map((h) => ({ items: withPositions(h.items) })));
+            setCurrent(0);
+            restored.current = true;
+            return;
+          }
+        }
+      }
+      restored.current = true;
+      loadRandom(0);
+    })();
     let timer;
     const check = async () => {
       try {
