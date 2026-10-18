@@ -1,7 +1,7 @@
 import { placeFor } from './layout.js';
 
 export const MAX_FITS = 5;
-export const MAX_ITEMS = 10;
+export const MAX_ITEMS = 12;
 
 let uidCounter = 1;
 const uid = () => `p${uidCounter++}`;
@@ -44,10 +44,17 @@ export function onBoard(fit, item) {
 // there yet, otherwise stepped away from it so pieces don't stack exactly.
 function freePosition(items, category) {
   const home = placeFor(category);
-  const taken = (x, y) => items.some((i) => Math.abs(i.x - x) < 3 && Math.abs(i.y - y) < 3);
-  for (let n = 0; n < 12; n++) {
-    const x = Math.min(92, home.x + n * 7);
-    const y = Math.min(92, home.y + n * 5);
+  const taken = (x, y) => items.some((i) => Math.abs(i.x - x) < 8 && Math.abs(i.y - y) < 8);
+  if (!taken(home.x, home.y)) return home;
+  // The home spot is used: fan out around it (second top beside the first, etc.),
+  // then anywhere free on the board.
+  const ring = [[-18, 0], [18, 0], [0, -20], [0, 20], [-18, -18], [18, 18], [18, -18], [-18, 18], [-30, 0], [30, 0]];
+  for (const [dx, dy] of ring) {
+    const x = Math.min(90, Math.max(10, home.x + dx)), y = Math.min(90, Math.max(10, home.y + dy));
+    if (!taken(x, y)) return { x, y };
+  }
+  for (let n = 0; n < 40; n++) {
+    const x = 12 + Math.random() * 76, y = 12 + Math.random() * 76;
     if (!taken(x, y)) return { x, y };
   }
   return { x: 50, y: 50 };

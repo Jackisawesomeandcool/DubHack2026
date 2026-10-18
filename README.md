@@ -3,7 +3,7 @@
 Build outfits ("hauls") from real, currently listed clothing. Every haul opens as a random outfit of
 product cutouts on a board. Describe what you want in the finder ("black hoodie under $80", "cozy fall
 outfit", "shoes under $30") and a row of matching products appears: press **+** to add one to the board
-(up to 10 pieces), or select a piece first and click an option to swap it in. Drag pieces to rearrange,
+(up to 12 pieces), or select a piece first and click an option to swap it in. Drag pieces to rearrange,
 hover for the price, click for name / brand / stock and a link to the listing.
 
 ## Features

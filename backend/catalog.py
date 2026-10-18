@@ -21,7 +21,8 @@ from intent import Intent
 
 DB_PATH = config.DATA_DIR / "catalog.sqlite"
 RESULT_TTL = 60 * 60          # cached search results stay valid this long
-MIN_FOR_RANDOM = 12           # items needed before random fits come from the catalog
+MIN_FOR_RANDOM = 12
+RANDOM_FIT_MIN, RANDOM_FIT_MAX = 4, 12   # pieces in a random fit           # items needed before random fits come from the catalog
 
 _lock = threading.RLock()
 _conn: sqlite3.Connection | None = None
@@ -378,9 +379,30 @@ def random_fit(models: bool) -> dict | None:
         by_cat.setdefault(r["category"], []).append(r)
     if not all(c in by_cat for c in ("top", "bottom", "shoes")):
         return None
-    cats = ["top", "bottom", "shoes"] + [c for c in ("outerwear", "headwear", "bag", "accessory") if c in by_cat and random.random() < 0.7]
+    # A random fit has 4–12 pieces: always a top, bottom and shoes, then the rest
+    # drawn from every category (extras can repeat a category — two tops, a
+    # second pair of shoes), never the same product twice.
+    n = random.randint(RANDOM_FIT_MIN, RANDOM_FIT_MAX)
+    picked: list = []
+    seen: set[str] = set()
+
+    def grab(cat: str) -> None:
+        options = [r for r in by_cat.get(cat, []) if r["url"] not in seen]
+        if options:
+            r = random.choice(options)
+            seen.add(r["url"])
+            picked.append(r)
+
+    for c in ("top", "bottom", "shoes"):
+        grab(c)
+    extras = [c for c in ("outerwear", "headwear", "bag", "accessory", "top", "bottom", "shoes") if c in by_cat]
+    weights = {"outerwear": 3, "headwear": 2, "bag": 2, "accessory": 2, "top": 1.5, "bottom": 1, "shoes": 1}
+    tries = 0
+    while len(picked) < n and tries < 40:
+        tries += 1
+        grab(random.choices(extras, weights=[weights[c] for c in extras])[0])
     return {"prompt": "from popular items", "models": models,
-            "items": [_row_to_item(random.choice(by_cat[c]), models) for c in cats]}
+            "items": [_row_to_item(r, models) for r in picked]}
 
 
 def random_items(n: int = 24, models: bool = False) -> list[dict]:

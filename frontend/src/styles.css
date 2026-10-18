@@ -135,6 +135,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   height: 100%;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr); /* never widen to fit a long tray row */
+  min-width: 0;
   gap: 14px;
   padding: 22px 32px 22px;
   max-width: 1500px;
@@ -474,11 +476,13 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .tray {
   position: relative;
   width: min(820px, 100%);
+  max-width: 100%;
+  min-width: 0;
   padding: 4px 4px 2px;
   animation: rise var(--mid) var(--ease);
 }
 .tray__title { margin: 0 6px 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
-.tray__scroller { position: relative; }
+.tray__scroller { position: relative; min-width: 0; max-width: 100%; }
 .tray__row {
   display: flex;
   align-items: flex-end;
@@ -717,6 +721,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
   margin-left: calc(clamp(180px, 16vw, 230px) + 28px);
   margin-right: calc(var(--browse-w, 200px) + 28px);
 }
@@ -1112,7 +1118,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .auth__board { position: relative; flex: 1; min-height: 0; pointer-events: none; }
 .auth__board .canvas { position: absolute; inset: 40px 24px 0; background: transparent; }
 .auth__pitch { position: relative; z-index: 2; padding: 0 32px 32px; display: flex; flex-direction: column; gap: 8px; }
-.auth__pitch h2 { margin: 0; max-width: 460px; font-size: 40px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
+.auth__pitch h2 { margin: 0; max-width: none; font-size: clamp(24px, 2.4vw, 38px); white-space: nowrap; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
 .auth__pitch p { margin: 0; max-width: 420px; font-size: 16px; color: var(--ink-2); }
 
 .auth__side { display: flex; align-items: center; justify-content: center; }
@@ -1151,7 +1157,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 @media (max-width: 860px) {
   .auth { grid-template-columns: 1fr; padding: 16px; gap: 20px; }
   .auth__panel { min-height: 300px; }
-  .auth__pitch h2 { font-size: 28px; }
+  .auth__pitch h2 { font-size: 28px; white-space: normal; }
   .auth__head h1 { font-size: 28px; }
   .account__name { display: none; }
   .field__pair { grid-template-columns: 1fr; }

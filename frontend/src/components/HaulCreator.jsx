@@ -281,10 +281,10 @@ export default function HaulCreator() {
       if (e.key === 'ArrowLeft' && swapUi.canPrev) { e.preventDefault(); swapUi.onPrev(); }
       else if (e.key === 'ArrowRight' && swapUi.canNext) { e.preventDefault(); swapUi.onNext(); }
       else if (e.key === 'Enter' && swapUi.dirty) { e.preventDefault(); swapUi.onKeep(); }
-      else if (e.key === 'Escape' && swapUi.dirty) { e.preventDefault(); swapUi.onUndo(); }
+      else if (e.key === 'Escape' && swapUi.dirty) { e.preventDefault(); e.stopPropagation(); swapUi.onUndo(); } // undo first; a second Esc closes
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true); // capture: runs before the card's own Escape-to-close
+    return () => window.removeEventListener('keydown', onKey, true);
   });
 
   function deleteFit(index) {
