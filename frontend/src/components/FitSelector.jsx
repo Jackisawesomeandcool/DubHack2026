@@ -40,7 +40,7 @@ export default function FitSelector({ fits, current, onSelect, onAdd, onDelete }
   }, [current, fits.length]);
 
   return (
-    <nav className="fits" aria-label="Hauls" ref={navRef} style={{ '--slide-ms': `${box?.ms || 0}ms` }}>
+    <nav className="fits" aria-label="Fits" ref={navRef} style={{ '--slide-ms': `${box?.ms || 0}ms` }}>
       {box && (
         <span
           className="fits__indicator"
@@ -61,15 +61,15 @@ export default function FitSelector({ fits, current, onSelect, onAdd, onDelete }
             <span className="fit__hl" aria-hidden="true">{fitLabel(i)}</span>
           </button>
           {onDelete && i === current && fits.length > 1 && (
-            <button type="button" className="fits__del" onClick={() => onDelete(i)} aria-label={`Delete ${fitLabel(i)}`} title="Delete this haul">
+            <button type="button" className="fits__del" onClick={() => onDelete(i)} aria-label={`Delete ${fitLabel(i)}`} title="Delete this fit">
               ×
             </button>
           )}
         </div>
       ))}
       {onAdd && fits.length < MAX_FITS && (
-        <button type="button" className="fits__tab fits__add" onClick={onAdd} aria-label="New haul">
-          + New haul
+        <button type="button" className="fits__tab fits__add" onClick={onAdd} aria-label="New fit">
+          + New fit
         </button>
       )}
     </nav>

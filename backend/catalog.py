@@ -370,6 +370,15 @@ def random_fit(models: bool) -> dict | None:
             "items": [_row_to_item(random.choice(by_cat[c]), models) for c in cats]}
 
 
+def random_items(n: int = 24, models: bool = False) -> list[dict]:
+    """A shuffled handful of in-stock pieces across categories (the Browse reel)."""
+    with _lock:
+        rows = _db().execute(
+            "SELECT * FROM products WHERE stock='in_stock' AND (cutout_p IS NOT NULL OR cutout_m IS NOT NULL) "
+            "ORDER BY RANDOM() LIMIT ?", (max(1, min(60, n)),)).fetchall()
+    return [_row_to_item(r, models) for r in rows]
+
+
 def known_urls(models: bool | None = None) -> set[str]:
     col = "cutout_m" if models else "cutout_p"
     with _lock:

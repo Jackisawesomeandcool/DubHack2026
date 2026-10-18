@@ -201,6 +201,10 @@ class Handler(BaseHTTPRequestHandler):
                 "users": 0 if config.HOSTED else auth.count(),
                 "hosted": config.HOSTED,
             })
+        if self.path.split("?")[0] == "/api/browse":
+            m = re.search(r"[?&]n=(\d+)", self.path)
+            n = int(m.group(1)) if m else 24
+            return self._json(HTTPStatus.OK, {"items": catalog.random_items(n)})
         if self.path.split("?")[0] == "/api/random-fit":
             if not _require_key(self):
                 return None

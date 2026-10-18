@@ -147,7 +147,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 /* board row: fit list on the left, board on the right */
 .stage {
   display: grid;
-  grid-template-columns: clamp(180px, 16vw, 230px) minmax(0, 1fr);
+  grid-template-columns: clamp(180px, 16vw, 230px) minmax(0, 1fr) var(--browse-w, 200px);
   grid-template-rows: minmax(0, 1fr);
   gap: 28px;
   min-height: 0;
@@ -722,8 +722,10 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   align-items: center;
   gap: 8px;
   margin-left: calc(clamp(180px, 16vw, 230px) + 28px);
+  margin-right: calc(var(--browse-w, 200px) + 28px);
 }
 .app.is-guest .dock { display: none; }
+.app.is-guest .stage { grid-template-columns: clamp(180px, 16vw, 230px) minmax(0, 1fr); }
 .prompt {
   display: flex;
   align-items: center;
@@ -1329,3 +1331,80 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   color: var(--ink-3);
 }
 .prompt__notice-x:hover { background: var(--hover); color: var(--ink); }
+
+/* ------------------------------------------------------------------ browse reel */
+:root { --browse-w: 200px; }
+.browse {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.browse__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 14px 8px;
+}
+.browse__title { font-size: 13px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.browse__spin {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 10px 0 8px; border-radius: var(--r-pill);
+  background: var(--paper); color: var(--ink);
+  font-size: 12px; font-weight: 700;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--fast) var(--ease), background var(--fast), color var(--fast);
+}
+.browse__spin:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); transform: translateY(-1px); }
+.browse__spin:disabled { opacity: 0.6; cursor: default; }
+.browse.is-spinning .browse__spin svg { animation: spinIcon 700ms linear infinite; }
+@keyframes spinIcon { to { transform: rotate(360deg); } }
+.browse__reel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  scroll-snap-type: y proximity;
+  padding: 6px 14px 40px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.browse__reel::-webkit-scrollbar { display: none; }
+.browse.is-spinning .browse__reel { scroll-snap-type: none; pointer-events: none; }
+.browse__card {
+  position: relative;
+  flex: none;
+  height: 116px; /* + 12px gap = CARD in BrowseColumn.jsx */
+  border-radius: var(--r-md);
+  background: var(--paper);
+  display: grid; place-items: center;
+  scroll-snap-align: start;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast);
+}
+.browse__card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.browse__card img { max-width: 80%; max-height: 82%; object-fit: contain; mix-blend-mode: multiply; pointer-events: none; }
+.browse.is-spinning .browse__card img { filter: blur(1.5px); }
+.browse__price {
+  position: absolute; left: 8px; bottom: 8px;
+  padding: 2px 8px; border-radius: var(--r-pill);
+  background: var(--surface); font-size: 11px; font-weight: 700;
+}
+.browse__action {
+  position: absolute; right: 8px; top: 8px;
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: var(--r-pill);
+  display: grid; place-items: center;
+  background: var(--ink); color: var(--accent-ink, #fff);
+  font-size: 12px; font-weight: 800;
+  opacity: 0; transition: opacity var(--fast);
+}
+.browse__card:hover .browse__action { opacity: 1; }
+.browse__empty { margin: 20px 0; text-align: center; font-size: 12px; color: var(--ink-3); }
+.browse__fade { position: absolute; left: 0; right: 0; height: 28px; pointer-events: none; }
+.browse__fade--top { top: 44px; background: linear-gradient(var(--surface), transparent); }
+.browse__fade--bottom { bottom: 0; background: linear-gradient(transparent, var(--surface)); }
+@media (max-width: 1100px) {
+  .stage { grid-template-columns: clamp(180px, 16vw, 230px) minmax(0, 1fr); }
+  .browse { display: none; }
+  .dock { margin-right: 0; }
+}

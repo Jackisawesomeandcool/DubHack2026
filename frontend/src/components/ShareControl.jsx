@@ -73,9 +73,9 @@ export default function ShareControl({ fits, current, disabled }) {
         {label}
       </button>
       {open && (
-        <div className="share__menu" role="dialog" aria-label="Choose hauls to share">
+        <div className="share__menu" role="dialog" aria-label="Choose fits to share">
           <div className="share__head">
-            <span>Share which hauls?</span>
+            <span>Share which fits?</span>
             <button type="button" className="share__all" onClick={() => setPicked(new Set(allChosen ? [] : filledIdx))}>
               {allChosen ? 'none' : 'all'}
             </button>
@@ -89,7 +89,7 @@ export default function ShareControl({ fits, current, disabled }) {
             </label>
           ))}
           <button type="button" className="share__go" disabled={!chosen.length} onClick={() => share(chosen.map((i) => fits[i]))}>
-            {chosen.length ? `Copy link · ${chosen.length} haul${chosen.length > 1 ? 's' : ''}` : 'Pick at least one'}
+            {chosen.length ? `Copy link · ${chosen.length} fit${chosen.length > 1 ? 's' : ''}` : 'Pick at least one'}
           </button>
         </div>
       )}
