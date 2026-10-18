@@ -240,6 +240,51 @@ def closest(intent_: Intent, n: int = 3, models: bool = False, exclude: list[str
     return out
 
 
+_vocab_cache: tuple[int, set[str]] = (-1, set())
+
+
+def vocab() -> set[str]:
+    """Stems of every word on an in-stock product (name, tags, brand) — what a typo can be corrected to."""
+    global _vocab_cache
+    n = count()
+    if _vocab_cache[0] != n:
+        with _lock:
+            rows = _db().execute("SELECT name, tags, brand FROM products WHERE stock='in_stock'").fetchall()
+        words = set()
+        for r in rows:
+            for w in _WORD.findall(f"{r['name']} {r['tags'] or ''} {r['brand']}".lower()):
+                if len(w) >= 4 and w.isalpha():
+                    words.add(_stem(w))
+        _vocab_cache = (n, words)
+    return _vocab_cache[1]
+
+
+_NOT_TYPOS = {"dollar", "dollars", "buck", "bucks", "price", "priced", "than", "under", "over", "below", "above", "between"}
+
+
+def correct(prompt: str) -> str | None:
+    """The prompt with misspelled words fixed against the catalog's vocabulary ("cartigans" -> "cardigan"),
+    or None when nothing needed (or could be) fixed. Only used after a search found nothing."""
+    import difflib
+    known = (vocab() | {_stem(w) for w in _SYN} | {_stem(w) for w in intent_mod.VIBES}
+             | {_stem(w) for w in intent_mod.COLOR_WORD} | set(intent_mod._BRAND_WORDS))
+    changed = False
+
+    def fix(m):
+        nonlocal changed
+        w = m.group()
+        if _stem(w) in known or w in intent_mod.STOP or w in _NOT_TYPOS or w in intent_mod._CONSTRAINT_WORDS:
+            return w
+        near = difflib.get_close_matches(_stem(w), sorted(known), n=1, cutoff=0.78)
+        if near:
+            changed = True
+            return near[0]
+        return w
+
+    fixed = re.sub(r"[a-z]{4,}", fix, prompt.lower())
+    return fixed if changed else None
+
+
 def floor_price(intent_: Intent) -> float | None:
     """Cheapest in-stock price among items matching everything except the price — for 'cheapest is $X'."""
     prices = [r["price"] for r in _rows(intent_, ignore_price=True) if (r["price"] or 0) > 0]
@@ -259,9 +304,13 @@ def _stem(w: str) -> str:
 def _score_term(r: sqlite3.Row, words: list[str], strict: bool = True) -> float:
     name = {_stem(w) for w in _WORD.findall(r["name"].lower())}   # whole words: "low" must not match "flower"
     tags = {_stem(w) for w in (r["tags"] or "").split()}
-    specific = [w for w in words if w not in _GENERIC and w not in intent_mod.COLOR_WORD and not w.isdigit()
-                and w not in intent_mod.BRANDS]
-    if strict and specific and not all(_stem(w) in name or _stem(w) in tags for w in specific):
+    specific = [w for w in words if w not in _GENERIC and w not in intent_mod.COLOR_FILTER_WORDS and not w.isdigit()
+                and w not in intent_mod.BRANDS and w not in intent_mod._BRAND_WORDS]
+    # Style words ("oversized", "cozy", "y2k") describe the product but rarely appear in its name. When the request
+    # also names the garment ("oversized hoodie"), only the garment is required; the style words just rank.
+    nouns = [w for w in specific if w not in intent_mod.VIBES]
+    required = nouns or specific
+    if strict and required and not all(_stem(w) in name or _stem(w) in tags for w in required):
         return 0.0            # "dunk low": every product word the user typed must be on the item
     score = 0.0
     for w in words:
@@ -271,6 +320,8 @@ def _score_term(r: sqlite3.Row, words: list[str], strict: bool = True) -> float:
         elif s in tags:
             score += 1.0
         elif w in _SYN and _SYN[w] == r["category"]:
+            score += 1.0
+        elif nouns and w in intent_mod.VIBES and ((name | tags) & intent_mod.VIBES[w]):
             score += 1.0
     return score
 
@@ -332,16 +383,19 @@ def search(intent_: Intent, models: bool, exclude: list[str], limit: int = 6) ->
     def _bare_category(w):
         return w in _SYN and _SYN[w] in (w, w.rstrip("s"), w + "s")
     filterish = bool(pool) and bool(words) and all(
-        w in intent_mod.VIBES or w in _GENERIC or _bare_category(w) or w in intent_mod.COLOR_WORD
+        w in intent_mod.VIBES or w in _GENERIC or _bare_category(w) or w in intent_mod.COLOR_FILTER_WORDS
         or w in intent_mod._BRAND_WORDS or w.isdigit() for w in words)
     if filterish and not any(w in intent_mod.VIBES for w in words):
         # "stussy", "nike shoes under 100": every word is already a hard filter, so the whole
         # filtered pool is the answer. Literal name hits still float to the top.
         hit = {id(r): s for s, r in scored}
         scored = [(hit.get(id(r), 0.1), r) for r in pool]
-    if any(w in intent_mod.VIBES for w in words):
+    names_a_garment = any(w not in _GENERIC and w not in intent_mod.COLOR_FILTER_WORDS and not w.isdigit()
+                          and w not in intent_mod._BRAND_WORDS and w not in intent_mod.VIBES for w in words)
+    if any(w in intent_mod.VIBES for w in words) and not names_a_garment:
         # A mood word ("gym", "fall", "comfy") reaches past the literal hits: "gym" should bring
-        # training gear, not only the one product with "Gym" in its name.
+        # training gear, not only the one product with "Gym" in its name. (Not when a garment is named:
+        # "baggy jeans" must not fill up with sweatpants.)
         seen = {id(r) for _, r in scored}
         scored += [(s, r) for s, r in _vibe_scored(pool, words) if id(r) not in seen]
     if not scored and sum(len(ws) for ws in term_words) >= 3:
@@ -353,7 +407,7 @@ def search(intent_: Intent, models: bool, exclude: list[str], limit: int = 6) ->
         # that suggest it (fleece, therma, dri-fit…) and mix categories like an outfit.
         scored = _vibe_scored(pool, intent_.words())
         if not scored and pool and (intent_.categories or intent_.has_filters()) and all(
-                w in intent_mod.VIBES or w in _GENERIC or w in _SYN or w in intent_mod.COLOR_WORD
+                w in intent_mod.VIBES or w in _GENERIC or w in _SYN or w in intent_mod.COLOR_FILTER_WORDS
                 or w in intent_mod._BRAND_WORDS or w.isdigit() for w in intent_.words()):
             # Every word typed is already a hard filter or a mood: "uniqlo", "nike shoes under 100",
             # "comfortable shoes under $100". Nothing more to rank by; the pool IS the answer, so

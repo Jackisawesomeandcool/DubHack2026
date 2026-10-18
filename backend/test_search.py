@@ -303,6 +303,45 @@ class Finder(unittest.TestCase):
         finally:
             load_dataset()
 
+    def test_brandy_melville_by_its_short_name(self):
+        for q in ("brandy", "brandy melville"):
+            got = finder.find(q, count=30)
+            self.assertTrue(got, q)
+            self.assertTrue(all("brandy" in i["brand"].lower() for i in got), q)
+
+    def test_brand_plus_garment(self):
+        got = finder.find("brandy cardigan")
+        self.assertTrue(got)
+        self.assertTrue(all("brandy" in i["brand"].lower() and "cardigan" in i["name"].lower() for i in got))
+
+    def test_misspelling_is_corrected_when_nothing_matches(self):
+        got = finder.find("cartigans", count=30)
+        self.assertTrue(got)
+        self.assertTrue(all("cardigan" in i["name"].lower() for i in got))
+        self.assertEqual(finder.find("zzqxv"), [])        # a word near nothing is still a miss
+
+    def test_style_word_ranks_but_the_garment_is_required(self):
+        for q, cat in (("oversized hoodie", "top"), ("baggy jeans", "bottom"), ("cozy sweater", "top")):
+            got = finder.find(q, count=30)
+            self.assertTrue(got, q)
+            self.assertEqual({i["category"] for i in got}, {cat}, q)      # not an outfit mix of whatever feels baggy
+        self.assertIn("jean", finder.find("baggy jeans")[0]["name"].lower())
+
+    def test_occasions_and_eras_find_an_outfit_mix(self):
+        for q in ("date night outfit", "outfit for a rainy day", "interview outfit", "y2k", "preppy", "hiking", "beach"):
+            got = finder.find(q, count=30)
+            self.assertTrue(got, q)
+            self.assertGreaterEqual(len({i["category"] for i in got}), 2, q)
+
+    def test_color_groups(self):
+        self.assertEqual(set(parse("neutral tops under 60").colors), {"black", "white", "grey", "beige", "brown"})
+        self.assertIn("green", parse("earth tones").colors)
+        self.assertEqual(parse("earth tones").price_max, None)
+        for q in ("neutral tops under 60", "earth tones", "something neutral"):
+            got = finder.find(q, count=30)
+            self.assertTrue(got, q)
+        self.assertTrue(all(i["category"] == "top" and i["price"] <= 60 for i in finder.find("neutral tops under 60", count=30)))
+
     def test_gibberish_still_matches_nothing(self):
         with self.assertRaises(finder.NoMatch):
             finder.results("xyzzy qwerty")

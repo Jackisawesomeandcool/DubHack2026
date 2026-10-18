@@ -33,14 +33,17 @@ SYN = {
     "bag": "bag", "bags": "bag", "backpack": "bag", "tote": "bag", "duffel": "bag", "crossbody": "bag",
     "socks": "accessory", "belt": "accessory", "accessory": "accessory", "accessories": "accessory", "gloves": "accessory",
     "scarf": "accessory", "sunglasses": "accessory",
+    "cardigan": "top", "cardigans": "top", "cardi": "top", "blouse": "top", "blouses": "top", "cami": "top", "camisole": "top",
+    "bodysuit": "top", "skirts": "bottom", "capri": "bottom", "capris": "bottom", "skort": "bottom",
 }
 STOP = {"a", "an", "the", "and", "or", "with", "for", "in", "on", "of", "to", "fit", "look", "outfit", "style",
-        "mens", "womens", "men", "women", "some", "me", "find", "show", "want", "need", "please", "i", "something"}
+        "mens", "womens", "men", "women", "some", "me", "find", "show", "want", "need", "please", "i", "something", "all"}
 
 # Filler that names no product ("comfortable clothes", "fall aesthetic"); ignored when matching.
 FILLER = {"clothes", "clothing", "clothe", "apparel", "wear", "gear", "stuff", "things", "pieces", "items", "outfits",
           "looks", "aesthetic", "aesthetics", "vibe", "vibes", "trendy", "cute", "nice", "good", "best", "season",
-          "seasonal", "inspo", "ideas", "popular", "new"}
+          "seasonal", "inspo", "ideas", "popular", "new", "tone", "tones", "shade", "shades", "color", "colors", "colour",
+          "colours", "palette"}
 STOP |= FILLER
 
 # Subjective words → words that appear in catalog product names/tags that fit the mood. Used by the keyword
@@ -56,6 +59,23 @@ _SPORT = {"dri", "training", "running", "track", "sportswear", "tech", "flow", "
           "max", "run", "road", "swoosh", "sport", "sports", "gym", "athletic", "football"}
 _STREET = {"graphic", "denim", "loose", "cargo", "baggy", "jordan", "dunk", "stussy", "tears", "oversized", "bomber",
            "heritage", "classic", "force", "trucker", "tee"}
+_BAGGY = {"oversized", "loose", "baggy", "relaxed", "boxy", "wide", "big", "cargo", "sweatpant", "jogger"}
+_RETRO = {"retro", "vintage", "heritage", "classic", "baggy", "cargo", "track", "jean", "denim", "corduroy", "varsity",
+          "college", "air", "max", "jersey", "tee", "loose"}
+_PREP = {"polo", "cardigan", "knit", "chino", "sweater", "oxford", "pleated", "stripe", "striped", "merino", "cashmere",
+         "wool", "classic", "shirt", "trouser", "culotte"}
+_SMART = {"shirt", "chino", "trouser", "pant", "polo", "blazer", "knit", "cardigan", "wool", "oxford", "merino", "cashmere",
+          "pleated", "coat", "sweater", "culotte", "ponte", "stretch"}
+_DATE = {"knit", "cardigan", "sweater", "denim", "jean", "wool", "cashmere", "merino", "tank", "skirt", "rib", "ribbed",
+         "pleated", "culotte", "waffle", "jacket", "leather", "coat", "trouser", "top"}
+_RAIN = {"shell", "gore", "tex", "waterproof", "repel", "storm", "windrunner", "jacket", "coat", "anorak", "parka", "rain",
+         "windbreaker", "hooded", "boot", "acg", "vest", "woven"}
+_HOT = {"short", "tank", "tee", "linen", "sandal", "slide", "cap", "bucket", "visor", "lightweight", "airism", "mesh",
+        "breathable", "summer", "beach", "swim", "dri", "sleeveless"}
+_TRAIL = {"acg", "trail", "hiking", "fleece", "gore", "shell", "jacket", "pant", "boot", "cargo", "vest", "lava", "outdoor",
+          "hooded", "anorak", "pack", "windrunner"}
+_PARTY = {"graphic", "tank", "cargo", "denim", "jean", "mesh", "bucket", "jersey", "crop", "baggy", "sneaker", "dunk",
+          "jordan", "tee", "top"}
 VIBES = {
     "comfortable": _COMFY, "comfy": _COMFY, "cozy": _COMFY, "soft": _COMFY, "relaxed": _COMFY, "lounge": _COMFY,
     "loungewear": _COMFY, "casual": _COMFY | {"club", "classic"}, "chill": _COMFY, "everyday": _COMFY,
@@ -65,6 +85,19 @@ VIBES = {
     "workout": _SPORT, "gym": _SPORT, "training": _SPORT, "active": _SPORT, "activewear": _SPORT, "performance": _SPORT,
     "sportswear": _SPORT, "running": _SPORT | {"road"}, "run": _SPORT, "runner": _SPORT,
     "streetwear": _STREET, "street": _STREET, "urban": _STREET, "skate": _STREET, "skater": _STREET, "hype": _STREET,
+    # fit and style words
+    "oversized": _BAGGY, "baggy": _BAGGY, "boxy": _BAGGY, "slouchy": _BAGGY, "wide": _BAGGY,
+    "y2k": _RETRO, "retro": _RETRO, "vintage": _RETRO, "90s": _RETRO, "2000s": _RETRO, "throwback": _RETRO,
+    "preppy": _PREP, "classy": _PREP | _SMART, "polished": _PREP | _SMART,
+    # occasions and weather
+    "date": _DATE, "dinner": _DATE, "brunch": _DATE, "romantic": _DATE, "night": _DATE,
+    "interview": _SMART, "office": _SMART, "work": _SMART, "business": _SMART, "professional": _SMART, "formal": _SMART,
+    "smart": _SMART, "meeting": _SMART,
+    "rain": _RAIN, "rainy": _RAIN, "wet": _RAIN, "storm": _RAIN, "stormy": _RAIN, "waterproof": _RAIN, "drizzle": _RAIN,
+    "summer": _HOT, "beach": _HOT, "vacation": _HOT, "poolside": _HOT, "sunny": _HOT, "humid": _HOT, "tropical": _HOT,
+    "hiking": _TRAIL, "hike": _TRAIL, "trail": _TRAIL, "camping": _TRAIL, "outdoor": _TRAIL, "outdoors": _TRAIL,
+    "gorpcore": _TRAIL, "trek": _TRAIL,
+    "festival": _PARTY, "concert": _PARTY, "party": _PARTY, "birthday": _PARTY, "clubbing": _PARTY, "rave": _PARTY,
     "basics": {"basic", "tee", "crew", "everyday", "classic", "polo", "heattech", "uniqlo"},
     "minimal": {"basic", "tee", "crew", "classic", "everyday", "uniqlo"}, "simple": {"basic", "tee", "crew", "classic"},
 }
@@ -89,10 +122,17 @@ COLORS = {
     "yellow": {"yellow", "gold", "mustard", "citron", "lemon"},
 }
 COLOR_WORD = {w: c for c, ws in COLORS.items() for w in ws}
+# words that stand for several colors at once ("neutral", "earth tones")
+COLOR_GROUPS = {
+    "neutral": ["black", "white", "grey", "beige", "brown"], "neutrals": ["black", "white", "grey", "beige", "brown"],
+    "earthy": ["brown", "beige", "green", "orange"], "earth": ["brown", "beige", "green", "orange"],
+}
+COLOR_FILTER_WORDS = set(COLOR_WORD) | set(COLOR_GROUPS)    # words that are a color filter and nothing more
 
 # brands in the catalog and common asks; matched as whole words, "stussy" also matches "Stüssy"
 BRANDS = {"nike", "jordan", "stussy", "uniqlo", "adidas", "puma", "new balance", "asics", "reebok",
-          "converse", "vans", "under armour", "lululemon", "patagonia", "north face", "carhartt", "levis", "zara"}
+          "converse", "vans", "under armour", "lululemon", "patagonia", "north face", "carhartt", "levis", "zara",
+          "brandy melville", "brandy"}   # "brandy" alone is how people say it; it matches the brand field "Brandy Melville"
 
 _BRAND_WORDS = {w for b in BRANDS for w in b.split()} | {"stüssy", "levi"}   # single words of the brand names
 
@@ -256,7 +296,8 @@ def parse(prompt: str, category: str | None = None) -> Intent:
         if re.search(rf"\b{re.escape(_norm(b))}\b", low) and _norm(b) not in [_norm(x) for x in it.brands]:
             it.brands.append(b)
     words = [w for w in _WORD.findall(text.lower()) if w not in STOP]
-    it.colors = list(dict.fromkeys(COLOR_WORD[w] for w in words if w in COLOR_WORD))
+    it.colors = list(dict.fromkeys([COLOR_WORD[w] for w in words if w in COLOR_WORD]
+                                   + [c for w in words for c in COLOR_GROUPS.get(w, ())]))
     it.categories = _categories_from(words)
     term = " ".join(w for w in words if w not in _CONSTRAINT_WORDS)
     it.terms = [term] if term else []

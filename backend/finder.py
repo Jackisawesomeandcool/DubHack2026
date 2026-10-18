@@ -70,7 +70,23 @@ def _dedupe(items: list[dict]) -> list[dict]:
 
 def results(prompt: str, category: str | None = None, exclude: list[str] | None = None,
             models: bool = False, count: int = COUNT) -> list[dict]:
-    """Finished products for a request (all from the catalog). Raises NoMatch."""
+    """Finished products for a request (all from the catalog). Raises NoMatch.
+    When nothing matches, a misspelling ("cartigans") is corrected against the catalog's words and tried once more."""
+    try:
+        return _results(prompt, category, exclude, models, count)
+    except NoMatch:
+        fixed = catalog.correct(prompt)
+        if fixed:
+            print(f"[finder] nothing for {prompt!r}; trying {fixed!r}", file=sys.stderr)
+            try:
+                return _results(fixed, category, exclude, models, count)
+            except NoMatch:
+                pass
+        raise
+
+
+def _results(prompt: str, category: str | None = None, exclude: list[str] | None = None,
+             models: bool = False, count: int = COUNT) -> list[dict]:
     exclude = exclude or []
     t0 = time.time()
     it = intent_mod.parse(prompt, category)
