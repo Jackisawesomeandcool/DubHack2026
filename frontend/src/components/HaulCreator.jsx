@@ -9,6 +9,7 @@ import PromptBar from './PromptBar.jsx';
 import Backdrop from './Backdrop.jsx';
 import { health, randomFit, seen, suggest } from '../lib/api.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
+import { isFavorite, loadFavorites, saveFavorites, toggleFavorite } from '../lib/favorites.js';
 
 const MAX_HISTORY = 7;
 
@@ -30,9 +31,26 @@ export default function HaulCreator() {
   const [setup, setSetup] = useState(null); // backend readiness notice
   const [dragOut, setDragOut] = useState(null); // piece currently held outside the board
 
+  // Starred listings (this browser) and whether the tray shows them instead of suggestions.
+  const [favorites, setFavorites] = useState(loadFavorites);
+  const [favMode, setFavMode] = useState(false);
+  const favoritesRef = useRef(favorites);
+  favoritesRef.current = favorites;
+  const favoritesFor = (item) => {
+    const others = favorites.filter((f) => !item || !sameProduct(f, item));
+    const same = item ? others.filter((f) => f.category === item.category) : [];
+    return same.length ? same : others;
+  };
+  function toggleFav(item) {
+    const next = toggleFavorite(favoritesRef.current, item);
+    setFavorites(next);
+    saveFavorites(next);
+  }
+
   // Swap session for the selected piece: alternatives are previewed on the
-  // board and only kept when the user says so.
-  const [swap, setSwap] = useState(null); // { uid, original, alts, index, loading, error }
+  // board and only kept when the user says so. `found` keeps the search
+  // results while the tray is switched to favorites.
+  const [swap, setSwap] = useState(null); // { uid, original, alts, found, index, loading, error }
   const swapRef = useRef(null);
   swapRef.current = swap;
 
@@ -103,18 +121,32 @@ export default function HaulCreator() {
 
   async function beginSwap(item) {
     revertSwap(swapRef.current);
-    const session = { uid: item.uid, original: item, alts: [], index: -1, loading: true, error: '' };
+    const favs = favoritesFor(item).filter((a) => !fit.items.some((b) => b.uid !== item.uid && sameProduct(b, a)));
+    const session = { uid: item.uid, original: item, alts: favMode ? favs : [], found: [], index: -1, loading: !favMode, error: '' };
     setSwap(session);
     setActiveId(null);
     try {
       const prompt = `${item.category === 'bottom' ? 'pants' : item.category} similar in style to ${item.name}`;
       const apply = (list) => {
-        const alts = list.filter((a) => !sameProduct(a, item) && !fit.items.some((b) => b.uid !== item.uid && sameProduct(b, a)));
-        setSwap((s) => (s && s.uid === item.uid ? { ...s, alts, loading: false } : s));
+        const found = list.filter((a) => !sameProduct(a, item) && !fit.items.some((b) => b.uid !== item.uid && sameProduct(b, a)));
+        setSwap((s) => (s && s.uid === item.uid ? { ...s, found, alts: favMode ? s.alts : found, loading: false } : s));
       };
       apply(await suggest(prompt, item.category, fit.items.map((i) => i.name), apply, modelsRef.current));
     } catch {
-      setSwap((s) => (s && s.uid === item.uid ? { ...s, loading: false, error: 'couldn’t find alternatives' } : s));
+      setSwap((s) => (s && s.uid === item.uid ? { ...s, loading: false, error: favMode ? '' : 'couldn’t find alternatives' } : s));
+    }
+  }
+
+  // Tray switch: suggestions <-> favorites. In a swap session the arrows then
+  // cycle whichever list is showing; an unkept preview is dropped first.
+  function toggleFavMode() {
+    const next = !favMode;
+    setFavMode(next);
+    const s = swapRef.current;
+    if (s) {
+      revertSwap(s);
+      const favs = favoritesFor(s.original).filter((a) => !fit.items.some((b) => b.uid !== s.uid && sameProduct(b, a)));
+      setSwap({ ...s, alts: next ? favs : s.found, index: -1, error: next ? '' : s.error });
     }
   }
 
@@ -198,10 +230,10 @@ export default function HaulCreator() {
     loadRandom(index);
   }
 
-  const trayOptions = active ? active.options : swap ? swap.alts : [];
-  const trayLoading = active ? active.loading : Boolean(swap?.loading);
-  const trayError = active ? active.error : swap?.error || '';
-  const showTray = Boolean(active) || Boolean(swap);
+  const trayOptions = swap ? swap.alts : favMode ? favoritesFor(null) : active ? active.options : [];
+  const trayLoading = swap ? Boolean(swap.loading) && !favMode : favMode ? false : Boolean(active?.loading);
+  const trayError = swap ? swap.error || '' : favMode ? '' : active?.error || '';
+  const showTray = Boolean(active) || Boolean(swap) || favMode;
 
   return (
     <main className="app">
@@ -233,6 +265,8 @@ export default function HaulCreator() {
           onRemove={(item) => { if (swap?.uid === item.uid) setSwap(null); update(current, (f) => removeItem(f, item)); }}
           onSelectionChange={onSelectionChange}
           onDragOutChange={setDragOut}
+          isFavorite={(item) => isFavorite(favorites, item)}
+          onFavorite={toggleFav}
         />
       </div>
 
@@ -242,7 +276,7 @@ export default function HaulCreator() {
         {setup && <div className="notice">{setup}</div>}
         {showTray && (
           <OptionsTray
-            title={swap && !active ? `swap ${swap.original.category === 'bottom' ? 'bottoms' : swap.original.category}` : ''}
+            title={swap ? `swap ${swap.original.category === 'bottom' ? 'bottoms' : swap.original.category}${favMode ? ' · favorites' : ''}` : favMode ? 'favorites' : ''}
             options={trayOptions}
             loading={trayLoading}
             error={trayError}
@@ -252,7 +286,10 @@ export default function HaulCreator() {
             swapMode={Boolean(swap)}
             onSwap={previewOption}
             onAdd={(item) => { seen([item]); update(current, (f) => addItem(f, item)); }}
-            onDismiss={() => { if (active) setActiveId(null); else { revertSwap(swapRef.current); setSwap(null); } }}
+            onDismiss={() => { if (favMode) setFavMode(false); else if (active) setActiveId(null); else { revertSwap(swapRef.current); setSwap(null); } }}
+            favMode={favMode}
+            favCount={favorites.length}
+            onToggleFavMode={toggleFavMode}
           />
         )}
         <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />

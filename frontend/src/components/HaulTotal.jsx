@@ -14,6 +14,8 @@ export default function HaulTotal({ total, pendingTotal = null }) {
     const dir = total > prev.current ? 'up' : 'down';
     prev.current = total;
     setAnim((a) => ({ dir, n: a.n + 1 }));
+    const t = setTimeout(() => setAnim((a) => ({ ...a, dir: '' })), 1100); // colour fades back to black
+    return () => clearTimeout(t);
   }, [total]);
 
   return (

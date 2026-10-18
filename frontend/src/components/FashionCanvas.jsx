@@ -17,6 +17,8 @@ export default function FashionCanvas({
   loading = false,
   hint = '',
   onHintClick,
+  isFavorite,
+  onFavorite,
 }) {
   const ref = useRef(null);
   const [selected, setSelected] = useState(null); // { uid, anchor }
@@ -80,6 +82,8 @@ export default function FashionCanvas({
           anchor={selected.anchor}
           onClose={close}
           onRemove={editable ? () => { onRemove?.(selectedItem); close(); } : undefined}
+          favorite={isFavorite ? isFavorite(selectedItem) : null}
+          onFavorite={onFavorite ? () => onFavorite(selectedItem) : undefined}
         />
       )}
     </section>

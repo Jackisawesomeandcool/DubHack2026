@@ -49,12 +49,19 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd }
 //   normal:     "+" adds the piece to the board (up to the board limit)
 //   swap mode:  (a piece is selected) clicking an option tries it in that
 //               piece's spot — keep or undo from the board
-export default function OptionsTray({ title, options, loading, error, isOnBoard, previewing, full, swapMode, onSwap, onAdd, onDismiss }) {
-  if (!loading && !error && options.length === 0 && !swapMode) return null;
+export default function OptionsTray({ title, options, loading, error, isOnBoard, previewing, full, swapMode, onSwap, onAdd, onDismiss, favMode = false, favCount = 0, onToggleFavMode }) {
+  if (!loading && !error && options.length === 0 && !swapMode && !favMode) return null;
 
   return (
     <div className="tray" role="region" aria-label="Options">
-      {title && <div className="tray__title">{title}</div>}
+      <div className="tray__head">
+        {title && <div className="tray__title">{title}</div>}
+        {onToggleFavMode && (
+          <button type="button" className={`tray__favs${favMode ? ' is-on' : ''}`} onClick={onToggleFavMode} aria-pressed={favMode}>
+            <span aria-hidden="true">★</span> {favMode ? 'back to suggestions' : `swap to favorites${favCount ? ` (${favCount})` : ''}`}
+          </button>
+        )}
+      </div>
       {loading && (
         <div className="tray__row">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -63,7 +70,9 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
         </div>
       )}
       {!loading && error && <p className="tray__msg">{error}</p>}
-      {!loading && !error && options.length === 0 && <p className="tray__msg">no alternatives found — try a search below</p>}
+      {!loading && !error && options.length === 0 && (
+        <p className="tray__msg">{favMode ? 'no favorites yet — click a piece and tap the ★ on its card' : 'no alternatives found — try a search below'}</p>
+      )}
       {!loading && !error && options.length > 0 && (
         <div className="tray__row">
           {options.map((item) => (

@@ -892,3 +892,25 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .share__pick.is-on .share__box { background: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 3px #fff; }
 .share__go { display: block; width: 100%; margin-top: 6px; height: 40px; border-radius: 12px; background: var(--ink); color: #fff; font-weight: 700; }
 .share__go:disabled { opacity: 0.4; cursor: default; }
+
+/* favorites */
+.popup { padding-bottom: 14px; }
+.popup__star {
+  position: absolute; right: 10px; bottom: 10px;
+  width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: var(--ink-3);
+  transition: color var(--fast), transform var(--fast) var(--ease), background var(--fast);
+}
+.popup__star:hover { color: var(--ink); background: var(--surface); transform: scale(1.1); }
+.popup__star.is-on { color: #e0a100; }
+.tray__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 6px 6px; min-height: 24px; }
+.tray__favs {
+  margin-left: auto;
+  height: 26px; padding: 0 10px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 700; color: var(--ink-2);
+  background: var(--surface); box-shadow: var(--shadow-sm);
+  transition: background var(--fast), color var(--fast), transform var(--fast) var(--ease);
+}
+.tray__favs:hover { color: var(--ink); transform: translateY(-1px); }
+.tray__favs.is-on { background: var(--ink); color: #fff; }
