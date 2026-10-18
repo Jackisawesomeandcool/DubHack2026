@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import FitSelector from './FitSelector.jsx';
 import HaulTotal from './HaulTotal.jsx';
+import Backdrop from './Backdrop.jsx';
 import FashionCanvas from './FashionCanvas.jsx';
 import { loadShare } from '../lib/api.js';
 import { fitTotal, withPositions } from '../lib/haul.js';
@@ -22,19 +23,22 @@ export default function GuestHaul({ shareId }) {
 
   return (
     <main className="app is-guest">
+      <Backdrop index={current} />
       <header className="bar">
-        <FitSelector fits={fits || []} current={current} onSelect={setCurrent} />
         <div className="bar__right">
           <HaulTotal total={total} />
         </div>
       </header>
 
-      <FashionCanvas
-        items={fit?.items || []}
-        fitKey={current}
-        loading={!fits && !missing}
-        hint={missing ? 'this haul link doesn’t exist' : ''}
-      />
+      <div className="stage">
+        <FitSelector fits={fits || []} current={current} onSelect={setCurrent} />
+        <FashionCanvas
+          items={fit?.items || []}
+          fitKey={current}
+          loading={!fits && !missing}
+          hint={missing ? 'this haul link doesn’t exist' : ''}
+        />
+      </div>
     </main>
   );
 }

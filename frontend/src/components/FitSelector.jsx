@@ -1,30 +1,24 @@
 import { MAX_FITS, fitLabel } from '../lib/haul.js';
 
-// Tab-like haul switcher with a single clear selected state. The active tab
-// shows a small × to delete that haul (when there's more than one).
-export default function FitSelector({ fits, current, onSelect, onAdd, onDelete }) {
+// Tab-like fit switcher with a single clear selected state.
+export default function FitSelector({ fits, current, onSelect, onAdd }) {
   return (
-    <nav className="fits" aria-label="Hauls">
+    <nav className="fits" aria-label="Fits">
       {fits.map((_, i) => (
-        <div key={i} className={`fits__item${i === current ? ' is-active' : ''}`}>
-          <button
-            type="button"
-            className={`fits__tab${i === current ? ' is-active' : ''}`}
-            aria-pressed={i === current}
-            onClick={() => onSelect(i)}
-          >
-            {fitLabel(i)}
-          </button>
-          {onDelete && i === current && fits.length > 1 && (
-            <button type="button" className="fits__del" onClick={() => onDelete(i)} aria-label={`Delete ${fitLabel(i)}`} title="Delete this haul">
-              ×
-            </button>
-          )}
-        </div>
+        <button
+          key={i}
+          type="button"
+          className={`fits__tab${i === current ? ' is-active' : ''}`}
+          aria-pressed={i === current}
+          onClick={() => onSelect(i)}
+        >
+          <span className="fit__label">{fitLabel(i)}</span>
+          <span className="fit__hl" aria-hidden="true">{fitLabel(i)}</span>
+        </button>
       ))}
       {onAdd && fits.length < MAX_FITS && (
-        <button type="button" className="fits__tab fits__add" onClick={onAdd} aria-label="New haul">
-          + HAUL
+        <button type="button" className="fits__tab fits__add" onClick={onAdd} aria-label="New fit">
+          + FIT
         </button>
       )}
     </nav>
