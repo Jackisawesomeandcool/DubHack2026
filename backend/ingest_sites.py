@@ -25,6 +25,7 @@ import re
 import sys
 import time
 import urllib.parse
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 if "--ai" not in sys.argv:
@@ -33,8 +34,10 @@ if "--ai" not in sys.argv:
         os.environ[_k] = ""
 
 import catalog
+import config
 import cutouts
 import images
+import quality
 from products import CATEGORIES
 
 STUSSY_FEED = "https://www.stussy.com/products.json?limit=250&page={page}"
@@ -105,7 +108,7 @@ def stussy_item(p: dict) -> dict | None:
     if not imgs:
         return None
     return {
-        "name": title.title() if title.isupper() else title, "brand": "Stüssy",  # the feed's "vendor" is often a fulfilment name ("Radial"), not the brand "price": min(prices),
+        "name": title.title() if title.isupper() else title, "brand": "Stüssy", "price": min(prices),  # feed "vendor" is often a fulfilment name ("Radial"), so brand is fixed
         "url": "https://www.stussy.com/products/" + str(p["handle"]), "category": cat,
         "candidates": imgs[:8], "tags": f"{ptype} {color}".lower(),
     }
@@ -214,13 +217,24 @@ def process(item: dict) -> bool:
     cands = item["candidates"]
     with ThreadPoolExecutor(max_workers=6) as pool:
         blobs = list(pool.map(_download, cands))
-    idx = cutouts.pick(blobs, False)
-    if idx < 0:
-        print(f"  no product-only photo for {item['name']}", file=sys.stderr)
-        return False
-    path = cutouts.make_cutout(cands[idx], blobs[idx], allow_flat=True)
+    # Try photos best-first: skin-tone check picks the order, then the finished cutout is run
+    # through the local person detector (quality.py) and the next photo is tried if a model slipped through.
+    first = cutouts.pick(blobs, False)
+    order = ([first] if first >= 0 else []) + [i for i, b in enumerate(blobs) if b and i != first]
+    path, flagged = None, 0
+    for idx in order[:4]:                 # at most 4 cutout attempts per product
+        if not blobs[idx]:
+            continue
+        cand = cutouts.make_cutout(cands[idx], blobs[idx], allow_flat=True)
+        if not cand:
+            continue
+        ok, _ = quality.check_cutout(config.DATA_DIR / "cutouts" / Path(cand).name)
+        if ok:
+            path = cand
+            break
+        flagged += 1
     if not path:
-        print(f"  cutout failed for {item['name']}", file=sys.stderr)
+        print(f"  no clean product-only photo for {item['name']} ({flagged} cutouts showed a person)", file=sys.stderr)
         return False
     row = {"name": item["name"], "brand": item["brand"], "price": item["price"], "url": item["url"],
            "image": path, "stock": "in_stock", "category": item["category"]}
