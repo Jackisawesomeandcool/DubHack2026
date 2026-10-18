@@ -61,6 +61,13 @@ Gemini (`gemini-2.5-flash`) with Google Search grounding, restricted to `ALLOWED
 product photo (`og:image`, Twitter card, or JSON-LD `Product.image`), verifies it serves an image,
 and sends it to the UI. Every visual comes directly from the listing site.
 
+**Bundled seed (no keys needed).** `backend/seed/nike.json` holds 153 real nike.com listings (name,
+price, URL, stock, photo URLs) collected 2026-10-17 across shoes, tops, outerwear, bottoms, hats, bags
+and socks. On first start the backend imports them into the catalog in the background, cutting out
+each photo locally (~1–2 min), so random hauls, swaps and searches work immediately with no search
+API and no scraping at runtime. Live sources (Google Custom Search, an AI key, or `WEB_SEARCH=1`) are
+optional extras that extend the catalog.
+
 **Speed: local catalog + nike.com search API.** On startup the backend warms a local catalog of
 popular Nike items (dunks, AF1, tech fleece, …) in the background, each stored with its finished
 cutout in `backend/data/catalog.sqlite` (SQLite, standard library). Random fits are assembled from the catalog in milliseconds,
