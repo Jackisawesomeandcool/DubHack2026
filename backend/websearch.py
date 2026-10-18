@@ -20,10 +20,14 @@ import images
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 _gap = threading.Lock()
 _last = 0.0
-MIN_GAP = 1.5  # seconds between search requests
+MIN_GAP = 3.0  # seconds between search requests (keyless endpoints throttle bursts)
 
 _RESULT = re.compile(r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>', re.S)
+_RSS_ITEM = re.compile(r"<item>(.*?)</item>", re.S)
+_RSS_TITLE = re.compile(r"<title>(.*?)</title>", re.S)
+_RSS_LINK = re.compile(r"<link>(.*?)</link>", re.S)
 _TAG = re.compile(r"<[^>]+>")
+_blocked_until: dict[str, float] = {}
 
 # Product-page URL shapes per store (so category/search pages are skipped).
 _PRODUCT_PATHS = {
@@ -48,29 +52,66 @@ def _decode_result_url(href: str) -> str:
     return urllib.parse.unquote(m.group(1)) if m else href
 
 
-def search_links(query: str, limit: int = 10) -> list[tuple[str, str]]:
-    """(url, title) results for a query across the allowed stores."""
-    sites = " OR ".join(f"site:{d}" for d in config.ALLOWED_DOMAINS) if config.ALLOWED_DOMAINS else ""
-    q = f"{query} {sites}".strip()
-    url = config.SEARCH_BASE_URL + "/html/?" + urllib.parse.urlencode({"q": q})
+def _fetch(url: str, accept: str) -> str:
     _polite()
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html", "Accept-Language": "en-US,en;q=0.9"})
-    try:
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            page = resp.read(2_000_000).decode("utf-8", "replace")
-    except Exception as err:  # noqa: BLE001
-        print(f"[websearch] failed ({err})", file=sys.stderr)
-        return []
-    out, seen = [], set()
-    for href, title in _RESULT.findall(page):
-        link = _decode_result_url(href).split("#")[0]
-        if link in seen:
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept, "Accept-Language": "en-US,en;q=0.9"})
+    with urllib.request.urlopen(req, timeout=12) as resp:
+        return resp.read(2_000_000).decode("utf-8", "replace")
+
+
+def _bing_rss(q: str, limit: int) -> list[tuple[str, str]]:
+    """Bing's keyless RSS search output."""
+    url = config.BING_BASE_URL + "/search?" + urllib.parse.urlencode({"q": q, "format": "rss", "count": 30})
+    page = _fetch(url, "application/rss+xml, application/xml, text/xml")
+    out = []
+    for item in _RSS_ITEM.findall(page):
+        t, l = _RSS_TITLE.search(item), _RSS_LINK.search(item)
+        if not l:
             continue
-        seen.add(link)
-        out.append((link, html.unescape(_TAG.sub("", title)).strip()))
+        link = html.unescape(l.group(1).strip()).split("#")[0]
+        title = html.unescape(_TAG.sub("", t.group(1))).replace("<![CDATA[", "").replace("]]>", "").strip() if t else ""
+        out.append((link, title))
         if len(out) >= limit:
             break
     return out
+
+
+def _ddg_html(q: str, limit: int) -> list[tuple[str, str]]:
+    url = config.SEARCH_BASE_URL + "/html/?" + urllib.parse.urlencode({"q": q})
+    page = _fetch(url, "text/html")
+    if "anomaly" in page.lower() and "result__a" not in page:
+        raise RuntimeError("bot check page")
+    out = []
+    for href, title in _RESULT.findall(page):
+        out.append((_decode_result_url(href).split("#")[0], html.unescape(_TAG.sub("", title)).strip()))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def search_links(query: str, limit: int = 10) -> list[tuple[str, str]]:
+    """(url, title) results for a query across the allowed stores, from the
+    first keyless source that answers (Bing RSS, then DuckDuckGo HTML)."""
+    sites = " OR ".join(f"site:{d}" for d in config.ALLOWED_DOMAINS) if config.ALLOWED_DOMAINS else ""
+    q = f"{query} {sites}".strip()
+    for name, fn in (("bing", _bing_rss), ("duckduckgo", _ddg_html)):
+        if time.time() < _blocked_until.get(name, 0):
+            continue
+        try:
+            results = fn(q, limit)
+        except Exception as err:  # noqa: BLE001
+            print(f"[websearch] {name} failed ({err}); pausing it for 2 min", file=sys.stderr)
+            _blocked_until[name] = time.time() + 120
+            continue
+        seen, out = set(), []
+        for link, title in results:
+            if link and link not in seen:
+                seen.add(link)
+                out.append((link, title))
+        if out:
+            return out
+        print(f"[websearch] {name}: no results for '{q}'", file=sys.stderr)
+    return []
 
 
 def is_product_url(url: str) -> bool:

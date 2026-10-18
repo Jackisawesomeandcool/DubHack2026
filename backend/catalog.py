@@ -241,7 +241,7 @@ def warm(find) -> None:
                     if "quota" in str(err).lower() or "429" in str(err):
                         print("[catalog] warm-up paused — AI quota exhausted; will resume on next restart or search", file=sys.stderr)
                         return
-                time.sleep(2.0)  # be gentle with the sources
+                time.sleep(4.0)  # be gentle with the keyless search endpoints
         finally:
             with _lock:
                 _warming = False

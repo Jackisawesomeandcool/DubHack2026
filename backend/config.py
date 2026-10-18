@@ -50,6 +50,7 @@ CUTOUT_PROVIDER = os.environ.get("CUTOUT_PROVIDER", "").strip().lower() or (
 
 # Keyless web search endpoint (DuckDuckGo HTML). Overridable for tests.
 SEARCH_BASE_URL = os.environ.get("SEARCH_BASE_URL", "https://html.duckduckgo.com").rstrip("/")
+BING_BASE_URL = os.environ.get("BING_BASE_URL", "https://www.bing.com").rstrip("/")
 
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8000"))
