@@ -7,9 +7,11 @@ import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import Backdrop from './Backdrop.jsx';
+import AccountChip from './AccountChip.jsx';
 import { health, randomFit, seen, suggest } from '../lib/api.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
 import { isFavorite, loadFavorites, saveFavorites, toggleFavorite } from '../lib/favorites.js';
+import { takeVibePrompt } from '../lib/session.js';
 
 const MAX_HISTORY = 7;
 
@@ -78,6 +80,9 @@ export default function HaulCreator() {
     if (booted.current) return;
     booted.current = true;
     loadRandom(0);
+    // First visit after onboarding: open the tray on the vibes they picked.
+    const vibePrompt = takeVibePrompt();
+    if (vibePrompt) find(vibePrompt);
     let timer;
     const check = async () => {
       try {
@@ -237,6 +242,7 @@ export default function HaulCreator() {
     <main className="app">
       <Backdrop index={current} />
       <header className="bar">
+        <AccountChip />
         <div className="bar__right">
           <HaulTotal total={total} resetKey={`${current}:${loadingFit}`} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
