@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatPrice, itemKey, sameProduct } from '../lib/haul.js';
 
-function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd }) {
+function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd, onUnfavorite }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
   if (item.pending) {
@@ -29,7 +29,7 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd }
         <span className="chip__price">{formatPrice(item.price)}</span>
         {swapMode && !onBoard && <span className="chip__swap">try</span>}
       </button>
-      {!swapMode && (
+      {!swapMode && !onUnfavorite && (
         <button
           type="button"
           className={`chip__badge${onBoard ? ' is-on' : ''}`}
@@ -41,6 +41,11 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd }
         </button>
       )}
       {isPreview && <span className="chip__badge is-preview" aria-hidden="true">●</span>}
+      {onUnfavorite && (
+        <button type="button" className="chip__unfav" onClick={() => onUnfavorite(item)} aria-label={`Remove ${item.name} from favorites`} title="Remove from favorites">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 2.8l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.7l-5.9 3.1 1.2-6.5L2.5 9.7l6.6-.9z" fill="currentColor" /></svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -49,7 +54,31 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd }
 //   normal:     "+" adds the piece to the board (up to the board limit)
 //   swap mode:  (a piece is selected) clicking an option tries it in that
 //               piece's spot — keep or undo from the board
-export default function OptionsTray({ title, options, loading, error, isOnBoard, previewing, full, swapMode, onSwap, onAdd, onDismiss, favMode = false, favCount = 0, onToggleFavMode }) {
+export default function OptionsTray({ title, options, loading, error, isOnBoard, previewing, full, swapMode, onSwap, onAdd, onDismiss, favMode = false, favCount = 0, onToggleFavMode, onUnfavorite }) {
+  const row = useRef(null);
+
+  // The row scrolls; ← → move it. In a swap the keys step through the
+  // alternatives instead (handled by the board), and the row follows the
+  // piece being tried so it never sits off-screen.
+  useEffect(() => {
+    if (swapMode) return undefined;
+    const onKey = (e) => {
+      if (e.target.closest?.('input, textarea')) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const el = row.current;
+      if (!el || el.scrollWidth <= el.clientWidth) return;
+      e.preventDefault();
+      el.scrollBy({ left: (e.key === 'ArrowRight' ? 1 : -1) * 220, behavior: 'smooth' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [swapMode]);
+  useEffect(() => {
+    if (!previewing || !row.current) return;
+    const el = row.current.querySelector('.chip.is-preview');
+    el?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [previewing]);
+
   if (!loading && !error && options.length === 0 && !swapMode && !favMode) return null;
 
   return (
@@ -74,7 +103,8 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
         <p className="tray__msg">{favMode ? 'no favorites yet — click a piece and tap the ★ on its card' : 'no alternatives found — try a search below'}</p>
       )}
       {!loading && !error && options.length > 0 && (
-        <div className="tray__row">
+        <div className="tray__scroller">
+          <div className="tray__row" ref={row}>
           {options.map((item) => (
             <OptionChip
               key={itemKey(item)}
@@ -85,8 +115,10 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
               full={full}
               onSwap={onSwap}
               onAdd={onAdd}
+              onUnfavorite={favMode ? onUnfavorite : undefined}
             />
           ))}
+          </div>
         </div>
       )}
       {!loading && !error && full && !swapMode && <p className="tray__note">board is full — select a piece to swap it</p>}

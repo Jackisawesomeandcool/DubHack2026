@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 // Floating finder at the bottom. Submit -> options appear above it.
-export default function PromptBar({ onSubmit, busy }) {
+export default function PromptBar({ onSubmit, busy, notice, onShowClosest, onDismissNotice }) {
   const [value, setValue] = useState('');
   // While the user types, the box holds still (CSS drops its twinkle); it resumes once they pause.
   const [typing, setTyping] = useState(false);
@@ -29,6 +29,18 @@ export default function PromptBar({ onSubmit, busy }) {
   }
 
   return (
+    <>
+    {notice && (
+      <div className="prompt__notice" role="status">
+        <span className="prompt__notice-text">{notice.reason}</span>
+        {notice.closest?.length > 0 && (
+          <button type="button" className="prompt__notice-go" onClick={onShowClosest}>
+            Show {notice.closest.length === 1 ? 'it' : 'closest'}
+          </button>
+        )}
+        <button type="button" className="prompt__notice-x" aria-label="Dismiss" onClick={onDismissNotice}>×</button>
+      </div>
+    )}
     <form className={`prompt${busy ? ' is-busy' : ''}${typing ? ' is-typing' : ''}`} onSubmit={submit}>
       <input
         className="prompt__input"
@@ -47,5 +59,6 @@ export default function PromptBar({ onSubmit, busy }) {
         </svg>
       </button>
     </form>
+    </>
   );
 }

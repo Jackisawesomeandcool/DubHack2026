@@ -135,18 +135,28 @@ export default function HaulCreator() {
     return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // "No shoes under $30" -> a note above the search bar with the nearest-priced products on offer.
+  const [searchNote, setSearchNote] = useState(null); // { id, reason, closest }
+  const showClosest = () => {
+    if (!searchNote) return;
+    patchHistory(searchNote.id, { options: searchNote.closest.map((i) => ({ ...i, pending: false })), loading: false });
+    setSearchNote(null);
+  };
+
   // Click the error message to try loading again.
   const retry = () => !loadingFit && fit.items.length === 0 && loadRandom(current);
 
   // Running a search (the arrow button / Enter) brings the tray back to suggestions.
-  async function find(prompt) {
+  async function find(prompt, label = prompt) {
     if (favMode) toggleFavMode();
+    setSearchNote(null);
     const id = nextId.current++;
-    setHistory((prev) => [{ id, prompt, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
+    setHistory((prev) => [{ id, prompt: label, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
     setActiveId(id);
     try {
       const items = await suggest(prompt, null, fit.items.map((i) => i.name), (partial) =>
-        patchHistory(id, { options: partial, loading: false }), modelsRef.current);
+        patchHistory(id, { options: partial, loading: false }), modelsRef.current,
+      (note) => setSearchNote({ id, ...note }));
       patchHistory(id, { options: items, loading: false });
     } catch {
       patchHistory(id, { loading: false, error: 'couldn’t find that — try again' });
@@ -180,6 +190,13 @@ export default function HaulCreator() {
       setSwap((s) => (s && s.uid === item.uid ? { ...s, loading: false, error: favMode ? '' : 'couldn’t find alternatives' } : s));
     }
   }
+
+  // While the favorites list is showing, starring/unstarring updates it in place
+  // (newest first), including the ‹ › list of a swap in progress.
+  useEffect(() => {
+    if (!favMode) return;
+    setSwap((s) => (s ? { ...s, alts: favoritesFor(s.original), index: Math.min(s.index, favoritesFor(s.original).length - 1) } : s));
+  }, [favorites]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tray switch: suggestions <-> favorites. In a swap session the arrows then
   // cycle whichever list is showing; an unkept preview is dropped first.
@@ -335,9 +352,16 @@ export default function HaulCreator() {
             favMode={favMode}
             favCount={favorites.length}
             onToggleFavMode={toggleFavMode}
+            onUnfavorite={toggleFav}
           />
         )}
-        <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
+        <PromptBar
+          onSubmit={find}
+          busy={Boolean(active?.loading)}
+          notice={searchNote}
+          onShowClosest={showClosest}
+          onDismissNotice={() => setSearchNote(null)}
+        />
       </footer>
     </main>
   );

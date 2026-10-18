@@ -478,14 +478,29 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   animation: rise var(--mid) var(--ease);
 }
 .tray__title { margin: 0 6px 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.tray__scroller { position: relative; }
 .tray__row {
   display: flex;
   align-items: flex-end;
+  justify-content: flex-start; /* never center: a centered overflowing row clips its left end */
   gap: 14px;
   overflow-x: auto;
+  scroll-snap-type: x proximity;
   scrollbar-width: none;
   padding: 10px 6px 6px;
+  scroll-padding: 0 6px;
 }
+.tray__row > * { scroll-snap-align: start; }
+.chip__unfav {
+  position: absolute; top: -6px; right: -6px;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--paper); color: #e0a100;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--fast) var(--ease), color var(--fast), background var(--fast);
+}
+.chip__unfav:hover { transform: scale(1.12); color: var(--ink); }
+.chip__unfav:hover svg path { fill: none; stroke: currentColor; stroke-width: 2; }
 .tray__row::-webkit-scrollbar { display: none; }
 .tray__msg { margin: 10px 8px; font-size: 14px; color: var(--ink-3); }
 .tray__note { margin: 4px 8px 0; font-size: 12px; color: var(--ink-3); }
@@ -1276,3 +1291,41 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   transition-duration: 320ms;
   transition-timing-function: ease;
 }
+
+/* ------------------------------------------------------------------ "no such listing" note above the search bar */
+.prompt__notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(760px, 100%);
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--line);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  animation: popIn 180ms var(--ease);
+}
+.prompt__notice-text { min-width: 0; }
+.prompt__notice-go {
+  flex: none;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  transition: transform var(--fast) var(--ease);
+}
+.prompt__notice-go:hover { transform: translateY(-1px); }
+.prompt__notice-x {
+  flex: none;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink-3);
+}
+.prompt__notice-x:hover { background: var(--hover); color: var(--ink); }
