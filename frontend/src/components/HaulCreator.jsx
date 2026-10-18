@@ -40,6 +40,8 @@ export default function HaulCreator() {
   const [favMode, setFavMode] = useState(false);
   const favoritesRef = useRef(favorites);
   favoritesRef.current = favorites;
+  const favModeRef = useRef(favMode);
+  favModeRef.current = favMode;
   // Everything starred, as is: no category filter, nothing hidden.
   const favoritesFor = (item) => favorites.filter((f) => !item || !sameProduct(f, item));
   function toggleFav(item) {
@@ -149,7 +151,11 @@ export default function HaulCreator() {
 
   // Running a search (the arrow button / Enter) brings the tray back to suggestions.
   async function find(prompt, label = prompt) {
-    if (favMode) toggleFavMode();
+    // A search replaces whatever the tray was showing: drop an unkept swap
+    // preview and the favorites view so the results are what you see.
+    const s0 = swapRef.current;
+    if (s0) { revertSwap(s0); setSwap(null); }
+    setFavMode(false);
     setSearchNote(null);
     const id = nextId.current++;
     setHistory((prev) => [{ id, prompt: label, options: [], loading: true, error: '' }, ...prev].slice(0, MAX_HISTORY));
@@ -174,21 +180,27 @@ export default function HaulCreator() {
     }
   }
 
-  async function beginSwap(item) {
+  function beginSwap(item) {
     revertSwap(swapRef.current);
-    const favs = favoritesFor(item);
-    const session = { uid: item.uid, original: item, alts: favMode ? favs : [], found: [], index: -1, loading: !favMode, error: '' };
-    setSwap(session);
+    // Suggestions are the default list for a selected piece (favorites on request).
+    const s = { uid: item.uid, original: item, alts: favMode ? favoritesFor(item) : [], found: null, index: -1, loading: !favMode, error: '' };
+    setSwap(s);
     setActiveId(null);
+    loadSuggestions(s);
+  }
+
+  async function loadSuggestions(s) {
+    const item = s.original;
+    setSwap((cur) => (cur && cur.uid === item.uid ? { ...cur, loading: true, error: '' } : cur));
     try {
       const prompt = `${item.category === 'bottom' ? 'pants' : item.category} similar in style to ${item.name}`;
       const apply = (list) => {
         const found = list.filter((a) => !sameProduct(a, item) && !fit.items.some((b) => b.uid !== item.uid && sameProduct(b, a)));
-        setSwap((s) => (s && s.uid === item.uid ? { ...s, found, alts: favMode ? s.alts : found, loading: false } : s));
+        setSwap((cur) => (cur && cur.uid === item.uid ? { ...cur, found, alts: favModeRef.current ? cur.alts : found, loading: false } : cur));
       };
       apply(await suggest(prompt, item.category, fit.items.map((i) => i.name), apply, modelsRef.current));
     } catch {
-      setSwap((s) => (s && s.uid === item.uid ? { ...s, loading: false, error: favMode ? '' : 'couldn’t find alternatives' } : s));
+      setSwap((cur) => (cur && cur.uid === item.uid ? { ...cur, found: [], loading: false, error: 'couldn’t find alternatives' } : cur));
     }
   }
 
@@ -207,7 +219,8 @@ export default function HaulCreator() {
     const s = swapRef.current;
     if (s) {
       revertSwap(s);
-      setSwap({ ...s, alts: next ? favoritesFor(s.original) : s.found, index: -1, error: next ? '' : s.error });
+      setSwap({ ...s, alts: next ? favoritesFor(s.original) : s.found || [], index: -1, error: next ? '' : s.error });
+      if (!next && s.found === null) loadSuggestions(s); // first time: go get them
     }
   }
 
@@ -293,6 +306,8 @@ export default function HaulCreator() {
 
   const trayOptions = swap ? swap.alts : favMode ? favoritesFor(null) : active ? active.options : [];
   const trayLoading = swap ? Boolean(swap.loading) && !favMode : favMode ? false : Boolean(active?.loading);
+  const trayFavEmpty = favMode && trayOptions.length === 0;
+  const trayNoMatch = !favMode && Boolean(swap) && !swap.loading && !swap.error && trayOptions.length === 0;
   const trayError = swap ? swap.error || '' : favMode ? '' : active?.error || '';
   const showTray = Boolean(active) || Boolean(swap) || favMode;
 
@@ -353,8 +368,10 @@ export default function HaulCreator() {
             swapMode={Boolean(swap)}
             onSwap={previewOption}
             onAdd={(item) => { seen([item]); update(current, (f) => addItem(f, item)); }}
-            onDismiss={() => { if (favMode) setFavMode(false); else if (active) setActiveId(null); else { revertSwap(swapRef.current); setSwap(null); } }}
+            onDismiss={() => { setFavMode(false); setActiveId(null); revertSwap(swapRef.current); setSwap(null); }}
             favMode={favMode}
+            favEmpty={trayFavEmpty}
+            noMatch={trayNoMatch}
             favCount={favorites.length}
             onToggleFavMode={toggleFavMode}
             onUnfavorite={toggleFav}

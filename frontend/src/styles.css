@@ -1415,3 +1415,18 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 [data-theme="maroon"] .chip__art img,
 [data-theme="midnight"] .item__art img,
 [data-theme="maroon"] .item__art img { mix-blend-mode: normal; }
+
+/* tray header tools: favorites toggle + zoom in, one group at the right */
+.tray__tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.tray__close { display: inline-flex; align-items: center; gap: 6px; }
+.tray__empty {
+  margin: 4px 6px 8px;
+  padding: 18px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 2px dashed var(--line-2, #cfcac2);
+  border-radius: var(--r-md);
+  color: var(--ink-3);
+  font-size: 13px; text-align: center;
+}
+.tray__empty strong { color: var(--ink-2); font-size: 14px; }
+.tray__emptystar { font-size: 22px; line-height: 1; opacity: 0.6; }

@@ -346,11 +346,6 @@ def search(intent_: Intent, models: bool, exclude: list[str], limit: int = 6) ->
         scored.sort(key=lambda t: (t[1]["price"] or 1e9, -t[0]))
     else:
         scored.sort(key=lambda t: (-t[0], -(t[1]["last_checked"] or 0)))
-    if not scored and intent_.explicit_category and pool:
-        # Nothing matched by keyword, but the category was explicit (a swap):
-        # offer other pieces of that kind — still within the price/color/brand filters.
-        random.shuffle(pool)
-        scored = [(0.0, r) for r in pool]
     return [_row_to_item(r, models) for _, r in scored[:limit]]
 
 

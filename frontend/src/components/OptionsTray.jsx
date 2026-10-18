@@ -54,7 +54,7 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd, 
 //   normal:     "+" adds the piece to the board (up to the board limit)
 //   swap mode:  (a piece is selected) clicking an option tries it in that
 //               piece's spot — keep or undo from the board
-export default function OptionsTray({ title, options, loading, error, isOnBoard, previewing, full, swapMode, onSwap, onAdd, onDismiss, favMode = false, favCount = 0, onToggleFavMode, onUnfavorite }) {
+export default function OptionsTray({ title, options, loading, error, isOnBoard, previewing, full, swapMode, onSwap, onAdd, onDismiss, favMode = false, favEmpty = false, noMatch = false, favCount = 0, onToggleFavMode, onUnfavorite }) {
   const row = useRef(null);
 
   // The row scrolls; ← → move it. In a swap the keys step through the
@@ -85,14 +85,19 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
     <div className="tray" role="region" aria-label="Options">
       <div className="tray__head">
         {title && <div className="tray__title">{title}</div>}
-        {onToggleFavMode && (
-          <button type="button" className={`tray__favs${favMode ? ' is-on' : ''}`} onClick={onToggleFavMode} aria-pressed={favMode}>
-            <span aria-hidden="true">★</span> {favMode ? 'back to suggestions' : `swap to favorites${favCount ? ` (${favCount})` : ''}`}
+        <div className="tray__tools">
+          {onToggleFavMode && (
+            <button type="button" className={`tray__favs${favMode ? ' is-on' : ''}`} onClick={onToggleFavMode} aria-pressed={favMode}>
+              {favMode ? 'back to suggestions' : <><span aria-hidden="true">★</span> swap to favorites{favCount ? ` (${favCount})` : ''}</>}
+            </button>
+          )}
+          <button type="button" className="tray__close" onClick={onDismiss} aria-label="Close this and zoom in on the board" title="Close and zoom in on the board">
+            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+              <path d="M3 8V3h5M17 12v5h-5M3 3l6 6M17 17l-6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            zoom in
           </button>
-        )}
-        <button type="button" className="tray__close" onClick={onDismiss} aria-label="Close options and zoom in on the board">
-          zoom in
-        </button>
+        </div>
       </div>
       {loading && (
         <div className="tray__row">
@@ -102,8 +107,22 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
         </div>
       )}
       {!loading && error && <p className="tray__msg">{error}</p>}
-      {!loading && !error && options.length === 0 && (
-        <p className="tray__msg">{favMode ? 'no favorites yet — click a piece and tap the ★ on its card' : 'no alternatives found — try a search below'}</p>
+      {!loading && !error && options.length === 0 && favEmpty && (
+        <div className="tray__empty" role="status">
+          <span className="tray__emptystar" aria-hidden="true">★</span>
+          <strong>No favorites yet</strong>
+          <span>Click a piece and tap the ★ on its card, or search below.</span>
+        </div>
+      )}
+      {!loading && !error && options.length === 0 && !favEmpty && noMatch && (
+        <div className="tray__empty" role="status">
+          <span className="tray__emptystar" aria-hidden="true">∅</span>
+          <strong>Nothing similar in the catalog</strong>
+          <span>Try a search below, or switch to your favorites.</span>
+        </div>
+      )}
+      {!loading && !error && options.length === 0 && !favEmpty && !noMatch && (
+        <p className="tray__msg">no results — try another search</p>
       )}
       {!loading && !error && options.length > 0 && (
         <div className="tray__scroller">
