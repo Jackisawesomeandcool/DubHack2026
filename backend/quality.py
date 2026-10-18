@@ -157,3 +157,54 @@ def check_cutout(path: str | Path, category: str | None = None) -> tuple[bool, s
     if verdict:
         return False, "a person is wearing it"
     return True, "ok"
+
+
+# ---------------------------------------------------------------- broken cutouts
+COVER_MIN = 0.25      # opaque share of the cutout's own bounding box below this = shredded
+COVER_WEAK = 0.35     # ...or weak coverage together with a scattered largest blob
+BLOB_MIN = 0.45
+
+
+def cutout_shape(path) -> tuple[float, float] | None:
+    """(cover, blob) for a cutout PNG: how solid the piece is inside its outline,
+    and the share of opaque pixels in the largest connected blob. None if unreadable."""
+    try:
+        from PIL import Image
+        import numpy as np
+        from collections import deque
+        im = Image.open(path).convert("RGBA")
+        a = np.array(im)[:, :, 3] > 40
+        if not a.any():
+            return 0.0, 0.0
+        ys, xs = np.where(a)
+        cover = float(a.sum() / ((ys.max() - ys.min() + 1) * (xs.max() - xs.min() + 1)))
+        small = np.array(im.resize((96, 96)))[:, :, 3] > 40
+        seen = np.zeros_like(small, bool)
+        best = 0
+        for y in range(96):
+            for x in range(96):
+                if small[y, x] and not seen[y, x]:
+                    q = deque([(y, x)]); seen[y, x] = True; n = 0
+                    while q:
+                        cy, cx = q.popleft(); n += 1
+                        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            ny, nx = cy + dy, cx + dx
+                            if 0 <= ny < 96 and 0 <= nx < 96 and small[ny, nx] and not seen[ny, nx]:
+                                seen[ny, nx] = True; q.append((ny, nx))
+                    best = max(best, n)
+        blob = best / max(1, int(small.sum()))
+        return cover, float(blob)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def broken_cutout(path) -> tuple[bool, str]:
+    """True when background removal shredded the product (e.g. a white hoodie on
+    a white backdrop keyed away to a few scraps). Multi-piece packs (socks) pass."""
+    shape = cutout_shape(path)
+    if shape is None:
+        return False, "unchecked"
+    cover, blob = shape
+    if cover < COVER_MIN or (cover < COVER_WEAK and blob < BLOB_MIN):
+        return True, f"shredded cutout (cover {cover:.2f}, blob {blob:.2f})"
+    return False, "ok"

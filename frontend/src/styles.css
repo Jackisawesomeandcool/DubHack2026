@@ -1377,12 +1377,13 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   border-radius: var(--r-md);
   background: var(--paper);
   display: grid; place-items: center;
+  overflow: hidden; /* a tall photo is cut off at the card edge, never spills over */
   scroll-snap-align: start;
   box-shadow: var(--shadow-sm);
   transition: transform var(--fast) var(--ease), box-shadow var(--fast);
 }
 .browse__card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.browse__card img { max-width: 80%; max-height: 82%; object-fit: contain; mix-blend-mode: multiply; pointer-events: none; }
+.browse__card img { width: 80%; height: 82%; object-fit: contain; mix-blend-mode: multiply; pointer-events: none; }
 .browse.is-spinning .browse__card img { filter: blur(1.5px); }
 .browse__price {
   position: absolute; left: 8px; bottom: 8px;
@@ -1407,3 +1408,11 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   .browse { display: none; }
   .dock { margin-right: 0; }
 }
+
+/* dark themes: multiply would dim every picture against a dark card, so blend normally there */
+[data-theme="midnight"] .browse__card img,
+[data-theme="maroon"] .browse__card img,
+[data-theme="midnight"] .chip__art img,
+[data-theme="maroon"] .chip__art img,
+[data-theme="midnight"] .item__art img,
+[data-theme="maroon"] .item__art img { mix-blend-mode: normal; }

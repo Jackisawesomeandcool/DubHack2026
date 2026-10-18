@@ -287,9 +287,15 @@ def quality_sweep() -> None:
                 return
             with catalog._lock:
                 rows = catalog._db().execute("SELECT url, name, cutout_p FROM products WHERE cutout_p LIKE '/cutouts/%'").fetchall()
-            bad = []
+            bad, shredded = [], []
             for url, name, cp in rows:
-                ok, _ = quality.check_cutout(Path(config.DATA_DIR) / "cutouts" / Path(cp).name)
+                path = Path(config.DATA_DIR) / "cutouts" / Path(cp).name
+                broken, why = quality.broken_cutout(path)
+                if broken:
+                    shredded.append(url)
+                    print(f"[quality] {why}, removing: {name}", file=sys.stderr)
+                    continue
+                ok, _ = quality.check_cutout(path)
                 if not ok:
                     bad.append(url)
                     print(f"[quality] person in cutout, dropping: {name}", file=sys.stderr)
@@ -297,7 +303,10 @@ def quality_sweep() -> None:
                 with catalog._lock:
                     catalog._db().executemany("UPDATE products SET cutout_p=NULL WHERE url=?", [(u,) for u in bad])
                     catalog._db().commit()
-            print(f"[quality] checked {len(rows)} cutouts · {len(bad)} dropped", file=sys.stderr)
+            if shredded:
+                import view_catalog
+                view_catalog.remove(shredded)   # blocked for good, synced to the shared dataset on export
+            print(f"[quality] checked {len(rows)} cutouts · {len(bad)} dropped · {len(shredded)} removed", file=sys.stderr)
         except Exception as err:  # noqa: BLE001
             print(f"[quality] sweep failed: {err}", file=sys.stderr)
 
