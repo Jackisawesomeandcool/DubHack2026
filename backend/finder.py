@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import catalog
 import cutouts
+import gsearch
 import llm
 import nike
 import websearch
@@ -41,6 +42,11 @@ def _live(prompt: str, category: str | None, exclude: list[str], count: int) -> 
         if items:
             print(f"[finder] nike.com search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
             return items, "nike"
+    if gsearch.configured():
+        items = normalize_list(gsearch.search(prompt, category, exclude, count))
+        if items:
+            print(f"[finder] google search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
+            return items, "google"
     items = normalize_list(websearch.search(prompt, category, exclude, count))
     if items:
         print(f"[finder] web search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)

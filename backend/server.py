@@ -193,7 +193,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    mode = f"search: web{' + ' + llm.provider() if llm.configured() else ' (no AI key, free mode)'} · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}"
+    import gsearch
+    src = "google" if gsearch.configured() else "web"
+    mode = f"search: {src}{' + ' + llm.provider() if llm.configured() else ''} · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
     print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER}")
     cutouts.warm()

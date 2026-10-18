@@ -48,6 +48,10 @@ REMOVEBG_API_KEY = os.environ.get("REMOVEBG_API_KEY", "").strip()
 CUTOUT_PROVIDER = os.environ.get("CUTOUT_PROVIDER", "").strip().lower() or (
     "photoroom" if PHOTOROOM_API_KEY else "removebg" if REMOVEBG_API_KEY else "local")
 
+# Google Custom Search JSON API (official, free 100/day, no billing): listings source.
+GOOGLE_CSE_KEY = os.environ.get("GOOGLE_CSE_KEY", "").strip()
+GOOGLE_CSE_CX = os.environ.get("GOOGLE_CSE_CX", "").strip()
+
 # Keyless web search endpoint (DuckDuckGo HTML). Overridable for tests.
 SEARCH_BASE_URL = os.environ.get("SEARCH_BASE_URL", "https://html.duckduckgo.com").rstrip("/")
 BING_BASE_URL = os.environ.get("BING_BASE_URL", "https://www.bing.com").rstrip("/")
