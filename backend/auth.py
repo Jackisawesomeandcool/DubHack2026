@@ -6,6 +6,9 @@ by the scraping tools, and user data must never ride along with that.
     users     id, username (unique, lowercase), email (unique, lowercase),
               first_name, password_hash, salt, created_at
     sessions  token, user_id, created_at, last_seen
+    state     user_id, favorites (JSON), hauls (JSON), updated_at
+              — everything a signed-in user builds: starred listings and
+              their haul boards (pieces + positions), reloaded on login
 
 Passwords are hashed with scrypt (standard library, no extra packages); a
 session token is a random 32-byte string the browser sends back as
@@ -16,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import re
 import secrets
 import sqlite3
@@ -62,6 +66,12 @@ def _db() -> sqlite3.Connection:
                 last_seen REAL NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+            CREATE TABLE IF NOT EXISTS state (
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                favorites TEXT NOT NULL DEFAULT '[]',
+                hauls TEXT NOT NULL DEFAULT '[]',
+                updated_at REAL NOT NULL
+            );
         """)
     return _conn
 
@@ -161,3 +171,35 @@ def logout(token: str | None) -> None:
 def count() -> int:
     with _lock:
         return _db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
+
+
+# ---------------------------------------------------------------- per-user state
+MAX_STATE_BYTES = 2_000_000
+
+
+def get_state(user_id: int) -> dict:
+    with _lock:
+        row = _db().execute("SELECT favorites, hauls, updated_at FROM state WHERE user_id=?", (user_id,)).fetchone()
+    if not row:
+        return {"favorites": [], "hauls": [], "updatedAt": None}
+    try:
+        return {"favorites": json.loads(row["favorites"]), "hauls": json.loads(row["hauls"]), "updatedAt": row["updated_at"]}
+    except json.JSONDecodeError:
+        return {"favorites": [], "hauls": [], "updatedAt": row["updated_at"]}
+
+
+def set_state(user_id: int, favorites, hauls) -> dict:
+    """Replace the user's favorites and hauls (whole snapshot, last write wins)."""
+    favorites = [f for f in (favorites or []) if isinstance(f, dict)][:200]
+    hauls = [h for h in (hauls or []) if isinstance(h, dict) and isinstance(h.get("items"), list)][:5]
+    fav_s, haul_s = json.dumps(favorites), json.dumps(hauls)
+    if len(fav_s) + len(haul_s) > MAX_STATE_BYTES:
+        raise AuthError("Too much data to save.")
+    now = time.time()
+    with _lock:
+        _db().execute(
+            "INSERT INTO state (user_id, favorites, hauls, updated_at) VALUES (?,?,?,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET favorites=excluded.favorites, hauls=excluded.hauls, updated_at=excluded.updated_at",
+            (user_id, fav_s, haul_s, now))
+        _db().commit()
+    return {"ok": True, "updatedAt": now}

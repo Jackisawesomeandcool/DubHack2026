@@ -29,7 +29,7 @@ import stock
 import store
 from products import CATEGORIES
 
-MAX_BODY = 256 * 1024
+MAX_BODY = 2 * 1024 * 1024
 MAX_PROMPT = 400
 
 
@@ -56,7 +56,7 @@ class Handler(BaseHTTPRequestHandler):
         if re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def _read_json(self) -> dict | None:
@@ -104,6 +104,9 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
+    def do_PUT(self):
+        return self.do_POST()
+
     def do_POST(self):
         if self.path == "/api/suggest":
             body = self._read_json() or {}
@@ -120,6 +123,16 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path.startswith("/api/auth/"):
             return self._auth_post()
+
+        if self.path == "/api/me/state":
+            user = auth.user_for(self._token())
+            if not user:
+                return self._json(HTTPStatus.UNAUTHORIZED, {"error": "not signed in"})
+            body = self._read_json() or {}
+            try:
+                return self._json(HTTPStatus.OK, auth.set_state(user["id"], body.get("favorites"), body.get("hauls")))
+            except auth.AuthError as err:
+                return self._json(HTTPStatus.BAD_REQUEST, {"error": str(err)})
 
         if self.path == "/api/seen":
             # Light stock re-check for products shown / placed on the board.
@@ -159,6 +172,11 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def do_GET(self):
+        if self.path == "/api/me/state":
+            user = auth.user_for(self._token())
+            if not user:
+                return self._json(HTTPStatus.UNAUTHORIZED, {"error": "not signed in"})
+            return self._json(HTTPStatus.OK, auth.get_state(user["id"]))
         if self.path == "/api/auth/me":
             user = auth.user_for(self._token())
             if not user:
