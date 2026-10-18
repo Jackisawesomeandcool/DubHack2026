@@ -37,8 +37,27 @@ def entries() -> list[dict]:
 
 
 def missing(models: bool = False) -> list[dict]:
-    have = catalog.known_urls(models)
+    """Seed entries with no cutout for this mode yet (absent, or still raw photo)."""
+    have = catalog.known_urls(models) - catalog.raw_urls(models)
     return [e for e in entries() if e["url"] not in have]
+
+
+def preload() -> int:
+    """Instantly register every seed listing with the retailer's own photo.
+
+    Nothing is downloaded: the browser loads the photo straight from the
+    retailer, so the board works the moment the server is up (even offline
+    from nike.com). The background pass later swaps in transparent cutouts.
+    """
+    known = catalog.known_urls(None)
+    todo = [e for e in entries() if e["url"] not in known and e.get("candidates")]
+    for e in todo:
+        photo = cutouts._fullres(e["candidates"][0])
+        it = dict(e, image=photo)
+        it.pop("candidates", None)
+        catalog.upsert([it], False, query=it["name"], source="seed")
+        catalog.upsert([it], True, query=it["name"], source="seed")
+    return len(todo)
 
 
 def load(models: bool = False, batch_pause: float = 0.2) -> int:
@@ -55,10 +74,19 @@ def load(models: bool = False, batch_pause: float = 0.2) -> int:
         if it["image"]:
             catalog.upsert([it], models, query=it["name"], source="seed")
             done += 1
+        else:
+            cutout_fail(it["url"])
         if i % 10 == 0:
             print(f"[seed] {i}/{len(todo)} processed · catalog {catalog.count()}", file=sys.stderr)
         time.sleep(batch_pause)
     return done
+
+
+_failed: dict[str, int] = {}
+
+
+def cutout_fail(url: str) -> None:
+    _failed[url] = _failed.get(url, 0) + 1
 
 
 def warm() -> None:
@@ -66,17 +94,20 @@ def warm() -> None:
     global _running
     if _running:
         return
-    todo = missing(False)
+    n = preload()
+    if n:
+        print(f"[seed] {n} bundled listings ready (catalog {catalog.count()})", file=sys.stderr)
+    todo = [e for e in missing(False) if _failed.get(e["url"], 0) < 2]
     if not todo:
         return
     _running = True
-    print(f"[seed] importing {len(todo)} bundled listings in the background…", file=sys.stderr)
+    print(f"[seed] building transparent cutouts for {len(todo)} listings in the background…", file=sys.stderr)
 
     def run():
         global _running
         try:
             n = load(False)
-            print(f"[seed] done — {n} listings ready (catalog {catalog.count()})", file=sys.stderr)
+            print(f"[seed] cutouts done — {n} built (catalog {catalog.count()})", file=sys.stderr)
         finally:
             _running = False
 
