@@ -1,5 +1,9 @@
 """Seed the catalog ahead of time.
 
+NOTE: search is catalog-only now (finder.py no longer calls live sources), so this
+script only exercises the search pipeline over products already in the catalog.
+To add products use ingest_sites.py / ingest_sitemap.py / seed.py.
+
     python3 ingest.py                # product-only cutouts, every style x category
     python3 ingest.py --models       # also on-model cutouts
     python3 ingest.py --limit 20     # stop after N searches

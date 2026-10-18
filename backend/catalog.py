@@ -16,6 +16,8 @@ import threading
 import time
 
 import config
+import intent as intent_mod
+from intent import Intent
 
 DB_PATH = config.DATA_DIR / "catalog.sqlite"
 RESULT_TTL = 60 * 60          # cached search results stay valid this long
@@ -33,17 +35,9 @@ POPULAR = [
     "backpack", "crossbody bag", "crew socks", "windbreaker", "sweatpants", "track jacket",
 ]
 
-_WORD = re.compile(r"[a-z0-9]+")
-_SYN = {
-    "jacket": "outerwear", "jackets": "outerwear", "coat": "outerwear", "coats": "outerwear", "windbreaker": "outerwear", "puffer": "outerwear", "outerwear": "outerwear",
-    "hoodie": "top", "hoodies": "top", "tee": "top", "tees": "top", "shirt": "top", "shirts": "top", "sweatshirt": "top", "crewneck": "top", "top": "top", "tops": "top", "sweater": "top",
-    "pants": "bottom", "joggers": "bottom", "shorts": "bottom", "cargos": "bottom", "sweatpants": "bottom", "bottoms": "bottom", "trousers": "bottom", "jeans": "bottom",
-    "shoes": "shoes", "shoe": "shoes", "sneakers": "shoes", "sneaker": "shoes", "kicks": "shoes", "boots": "shoes", "runners": "shoes", "dunks": "shoes",
-    "hat": "headwear", "hats": "headwear", "cap": "headwear", "caps": "headwear", "beanie": "headwear",
-    "bag": "bag", "bags": "bag", "backpack": "bag", "tote": "bag",
-    "socks": "accessory", "belt": "accessory", "accessory": "accessory", "accessories": "accessory",
-}
-_STOP = {"a", "an", "the", "and", "or", "with", "for", "in", "on", "of", "to", "fit", "look", "outfit", "style", "nike", "mens", "womens", "men", "women"}
+_WORD = intent_mod._WORD
+_SYN = intent_mod.SYN
+_STOP = intent_mod.STOP
 
 
 # ---------------------------------------------------------------- db
@@ -81,7 +75,7 @@ def _db() -> sqlite3.Connection:
 def _row_to_item(r: sqlite3.Row, models: bool) -> dict:
     return {
         "name": r["name"], "brand": r["brand"], "price": r["price"], "url": r["url"],
-        "image": (r["cutout_m"] if models else r["cutout_p"]) or "",
+        "image": (r["cutout_m"] if models else r["cutout_p"]) or r["cutout_p"] or r["cutout_m"] or "",
         "stock": r["stock"], "category": r["category"],
     }
 
@@ -130,8 +124,8 @@ def set_stock(url: str, stock: str) -> None:
         _db().commit()
 
 
-def cache_results(prompt: str, category: str | None, models: bool, items: list[dict]) -> None:
-    key = _result_key(prompt, category, models)
+def cache_results(intent_: Intent, models: bool, items: list[dict]) -> None:
+    key = _result_key(intent_, models)
     with _lock:
         _db().execute("INSERT OR REPLACE INTO results (key, urls, created) VALUES (?,?,?)",
                       (key, json.dumps([_url_key(i) for i in items if i.get("image")]), time.time()))
@@ -139,68 +133,130 @@ def cache_results(prompt: str, category: str | None, models: bool, items: list[d
 
 
 # ---------------------------------------------------------------- read
-def _result_key(prompt: str, category: str | None, models: bool) -> str:
-    return f"{' '.join(_WORD.findall(prompt.lower()))}|{category or ''}|{'m' if models else 'p'}"
+KEY_VERSION = "v2"   # bump when the key format changes; old rows simply never match again
 
 
-def cached_results(prompt: str, category: str | None, models: bool, exclude: list[str]) -> list[dict] | None:
-    """Products from an earlier identical search, if still fresh and in stock."""
+def _result_key(intent_: Intent, models: bool) -> str:
+    """Keyed by the *parsed* intent, so 'shoes under $50' and 'shoes below 50 dollars' share a cache."""
+    return f"{KEY_VERSION}|{intent_.key()}|{'m' if models else 'p'}"
+
+
+def _filter_item(r: sqlite3.Row, models: bool) -> dict:
+    """Item plus the fields the hard filter looks at."""
+    return {**_row_to_item(r, models), "tags": r["tags"] or ""}
+
+
+def cached_results(intent_: Intent, models: bool, exclude: list[str]) -> list[dict] | None:
+    """Products from an earlier identical search, if still fresh, in stock and still within the filters."""
     with _lock:
-        row = _db().execute("SELECT urls, created FROM results WHERE key=?", (_result_key(prompt, category, models),)).fetchone()
+        row = _db().execute("SELECT urls, created FROM results WHERE key=?", (_result_key(intent_, models),)).fetchone()
         if not row or time.time() - row["created"] > RESULT_TTL:
             return None
-        col = "cutout_m" if models else "cutout_p"
         ex = {n.lower() for n in exclude}
         out = []
         for url in json.loads(row["urls"]):
-            r = _db().execute(f"SELECT * FROM products WHERE url=? AND stock='in_stock' AND {col} IS NOT NULL", (url,)).fetchone()
-            if r and r["name"].lower() not in ex:
-                out.append(_row_to_item(r, models))
+            r = _db().execute("SELECT * FROM products WHERE url=? AND stock='in_stock'", (url,)).fetchone()
+            if r and r["name"].lower() not in ex and intent_mod.matches(_filter_item(r, models), intent_):
+                item = _row_to_item(r, models)
+                if item["image"]:
+                    out.append(item)
         return out
 
 
-def _score(r: sqlite3.Row, words: list[str], cat_hint: str | None) -> float:
-    if cat_hint and r["category"] != cat_hint:
-        return 0.0
-    name = r["name"].lower()
-    tags = set((r["tags"] or "").split())
+def _rows(intent_: Intent, ignore_price: bool = False) -> list[sqlite3.Row]:
+    """In-stock rows with a cutout that satisfy the intent's hard constraints (price optional)."""
+    sql = "SELECT * FROM products WHERE stock='in_stock' AND (cutout_p IS NOT NULL OR cutout_m IS NOT NULL)"
+    args: list = []
+    if intent_.categories:
+        sql += f" AND category IN ({','.join('?' * len(intent_.categories))})"
+        args += intent_.categories
+    if not ignore_price and (intent_.price_max is not None or intent_.price_min is not None):
+        sql += " AND price > 0"                      # unknown price never satisfies a budget
+        if intent_.price_max is not None:
+            sql += " AND price <= ?"
+            args.append(intent_.price_max)
+        if intent_.price_min is not None:
+            sql += " AND price >= ?"
+            args.append(intent_.price_min)
+    with _lock:
+        rows = _db().execute(sql, args).fetchall()
+    probe = intent_ if not ignore_price else Intent(raw=intent_.raw, categories=intent_.categories,
+                                                     colors=intent_.colors, brands=intent_.brands)
+    return [r for r in rows if intent_mod.matches(_filter_item(r, False), probe)]
+
+
+def candidates(intent_: Intent, models: bool, exclude: list[str]) -> list[dict]:
+    """Every catalog product that passes the hard filters — the pool the AI ranker chooses from."""
+    ex = {n.lower() for n in exclude}
+    return [_row_to_item(r, models) for r in _rows(intent_) if r["name"].lower() not in ex]
+
+
+def floor_price(intent_: Intent) -> float | None:
+    """Cheapest in-stock price among items matching everything except the price — for 'cheapest is $X'."""
+    prices = [r["price"] for r in _rows(intent_, ignore_price=True) if (r["price"] or 0) > 0]
+    return min(prices) if prices else None
+
+
+# Category words satisfied by the category alone; other synonyms ("hoodie", "joggers")
+# name a specific garment and must appear on the item.
+_GENERIC = {"shoes", "shoe", "sneakers", "sneaker", "kicks", "footwear", "top", "tops", "bottom", "bottoms", "pants",
+            "outerwear", "jacket", "jackets", "coat", "coats", "hat", "hats", "headwear", "bag", "bags", "accessory", "accessories"}
+
+
+def _stem(w: str) -> str:
+    return w[:-1] if len(w) > 3 and w.endswith("s") else w
+
+
+def _score_term(r: sqlite3.Row, words: list[str], strict: bool = True) -> float:
+    name = {_stem(w) for w in _WORD.findall(r["name"].lower())}   # whole words: "low" must not match "flower"
+    tags = {_stem(w) for w in (r["tags"] or "").split()}
+    specific = [w for w in words if w not in _GENERIC and w not in intent_mod.COLOR_WORD and not w.isdigit()
+                and w not in intent_mod.BRANDS]
+    if strict and specific and not all(_stem(w) in name or _stem(w) in tags for w in specific):
+        return 0.0            # "dunk low": every product word the user typed must be on the item
     score = 0.0
     for w in words:
-        if w in _SYN and _SYN[w] == r["category"]:
-            score += 1.0
-        elif w in name:
+        s = _stem(w)
+        if s in name:
             score += 2.0
-        elif w in tags:
+        elif s in tags:
+            score += 1.0
+        elif w in _SYN and _SYN[w] == r["category"]:
             score += 1.0
     return score
 
 
-def search(prompt: str, category: str | None, models: bool, exclude: list[str], limit: int = 6) -> list[dict]:
-    words = [w for w in _WORD.findall(prompt.lower()) if w not in _STOP and len(w) > 1]
-    cat_hint = category or next((_SYN[w] for w in words if w in _SYN), None)
-    col = "cutout_m" if models else "cutout_p"
+def _score(r: sqlite3.Row, term_words: list[list[str]], strict: bool = True) -> float:
+    return max((_score_term(r, ws, strict) for ws in term_words), default=0.0)
+
+
+def search(intent_: Intent, models: bool, exclude: list[str], limit: int = 6) -> list[dict]:
+    """Keyword-ranked catalog hits within the hard filters. Used when no AI ranker is available
+    (and by the ranker as a tie-break)."""
     ex = {n.lower() for n in exclude}
-    with _lock:
-        rows = _db().execute(
-            f"SELECT * FROM products WHERE stock='in_stock' AND {col} IS NOT NULL" + (" AND category=?" if cat_hint else ""),
-            (cat_hint,) if cat_hint else ()).fetchall()
-    scored = [(_score(r, words, cat_hint), r) for r in rows if r["name"].lower() not in ex]
-    ranked = [(s, r) for s, r in scored if s > 0]
-    ranked.sort(key=lambda t: (-t[0], -(t[1]["last_checked"] or 0)))
-    if not ranked and cat_hint:
+    term_words = intent_.term_words()
+    pool = [r for r in _rows(intent_) if r["name"].lower() not in ex]
+    scored = [(s, r) for r in pool for s in [_score(r, term_words)] if s > 0]
+    if not scored and sum(len(ws) for ws in term_words) >= 3:
+        # A descriptive request ("skater fit with wide-leg pants and skate shoes"): no item carries
+        # every word, so rank by how many it does carry. Hard filters still apply.
+        scored = [(s, r) for r in pool for s in [_score(r, term_words, strict=False)] if s > 0]
+    if intent_.sort == "price_asc":
+        scored.sort(key=lambda t: (t[1]["price"] or 1e9, -t[0]))
+    else:
+        scored.sort(key=lambda t: (-t[0], -(t[1]["last_checked"] or 0)))
+    if not scored and intent_.explicit_category and pool:
         # Nothing matched by keyword, but the category was explicit (a swap):
-        # offer other pieces of that kind rather than nothing.
-        pool = [r for _, r in scored]
+        # offer other pieces of that kind — still within the price/color/brand filters.
         random.shuffle(pool)
-        ranked = [(0.0, r) for r in pool]
-    return [_row_to_item(r, models) for _, r in ranked[:limit]]
+        scored = [(0.0, r) for r in pool]
+    return [_row_to_item(r, models) for _, r in scored[:limit]]
 
 
 def random_fit(models: bool) -> dict | None:
     """One in-stock piece per category from the catalog, or None if too thin."""
-    col = "cutout_m" if models else "cutout_p"
-    with _lock:
-        rows = _db().execute(f"SELECT * FROM products WHERE stock='in_stock' AND {col} IS NOT NULL").fetchall()
+    with _lock:   # on-model mode falls back to product cutouts (see _row_to_item)
+        rows = _db().execute("SELECT * FROM products WHERE stock='in_stock' AND (cutout_p IS NOT NULL OR cutout_m IS NOT NULL)").fetchall()
     if len(rows) < MIN_FOR_RANDOM:
         return None
     by_cat: dict[str, list] = {}

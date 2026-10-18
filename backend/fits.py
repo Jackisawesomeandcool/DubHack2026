@@ -1,9 +1,9 @@
 """Random fits, pre-built in the background so the board opens instantly.
 
-A small pool of complete fits (one piece per category, all with verified
-real photos) is kept on disk. GET /api/random-fit pops one and a background
-thread refills the pool. The very first request on a fresh install has to
-wait for one live search.
+A small pool of complete fits (one piece per category, picked by the AI
+ranker from the catalog for one of the STYLES prompts) is kept on disk.
+GET /api/random-fit pops one and a background thread refills the pool; when
+the pool is empty a random one-per-category fit is served instantly instead.
 """
 
 import json
@@ -68,7 +68,7 @@ def build_one(models: bool = False) -> dict:
 
 
 def _build(prompt: str, models: bool) -> dict:
-    items = finder.find(prompt, models, count=7, local_first=False)
+    items = finder.find(prompt, models, count=7)   # catalog only: the AI picks a coherent fit
     if not items:
         raise llm.LLMError("No pieces with a usable photo")
     # One piece per category: keep the first of each.
@@ -128,31 +128,15 @@ def _pop(pool: list, models: bool):
 
 
 def take(models: bool = False) -> dict:
-    """Random fit, instantly when possible: from the local catalog of popular
-    items, else from the pre-built pool, else built live."""
-    quick = catalog.random_fit(models)
-    if quick:
-        ensure_pool()
-        return quick
+    """Random fit: a pre-built AI-picked fit from the pool when one is ready,
+    else a random one-piece-per-category fit from the catalog (instant), else
+    build one now."""
     with _lock:
         pool = _read()
         fit = _pop(pool, models)
         if fit:
             _write(pool)
-    if fit is None and _refilling:
-        # A background build is already running — wait for it instead of
-        # starting a second search in parallel.
-        for _ in range(240):
-            time.sleep(0.5)
-            with _lock:
-                pool = _read()
-                fit = _pop(pool, models)
-                if fit:
-                    _write(pool)
-                    break
-            if not _refilling:
-                break
     if fit is None:
-        fit = build_one(models)
+        fit = catalog.random_fit(models) or build_one(models)
     ensure_pool()
     return fit
