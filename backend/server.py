@@ -125,12 +125,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._auth_post()
 
         if self.path == "/api/me/state":
-            user = auth.user_for(self._token())
+            body = self._read_json() or {}
+            # sendBeacon (page close) can't set headers: the token may come in the body.
+            tok = self._token() or (body.get("token") if isinstance(body.get("token"), str) else None)
+            user = auth.user_for(tok)
             if not user:
                 return self._json(HTTPStatus.UNAUTHORIZED, {"error": "not signed in"})
-            body = self._read_json() or {}
             try:
-                return self._json(HTTPStatus.OK, auth.set_state(user["id"], body.get("favorites"), body.get("hauls")))
+                return self._json(HTTPStatus.OK, auth.set_state(user["id"], body.get("favorites"), body.get("hauls"), body.get("history")))
             except auth.AuthError as err:
                 return self._json(HTTPStatus.BAD_REQUEST, {"error": str(err)})
 

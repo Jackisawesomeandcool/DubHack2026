@@ -90,10 +90,21 @@ export async function loadState() {
   return res.json();
 }
 
-export function saveState(favorites, hauls) {
+export function saveState(favorites, hauls, history) {
   return fetch('/api/me/state', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ favorites, hauls }),
-  }).catch(() => {});
+    body: JSON.stringify({ favorites, hauls, history }),
+    keepalive: true,
+  }).then((r) => r.ok).catch(() => false);
+}
+
+// Last-chance save when the tab closes (no headers possible: token in the body).
+export function saveStateBeacon(favorites, hauls, history) {
+  try {
+    const token = JSON.parse(localStorage.getItem('haul:token') || 'null');
+    if (!token) return;
+    const blob = new Blob([JSON.stringify({ token, favorites, hauls, history })], { type: 'application/json' });
+    navigator.sendBeacon('/api/me/state', blob);
+  } catch { /* nothing to flush */ }
 }

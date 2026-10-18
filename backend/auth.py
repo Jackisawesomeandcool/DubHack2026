@@ -73,6 +73,10 @@ def _db() -> sqlite3.Connection:
                 updated_at REAL NOT NULL
             );
         """)
+        cols = {r[1] for r in _conn.execute("PRAGMA table_info(state)").fetchall()}
+        if "history" not in cols:
+            _conn.execute("ALTER TABLE state ADD COLUMN history TEXT NOT NULL DEFAULT '[]'")
+            _conn.commit()
     return _conn
 
 
@@ -177,29 +181,37 @@ def count() -> int:
 MAX_STATE_BYTES = 2_000_000
 
 
+def _loads(text: str) -> list:
+    try:
+        v = json.loads(text or "[]")
+        return v if isinstance(v, list) else []
+    except json.JSONDecodeError:
+        return []
+
+
 def get_state(user_id: int) -> dict:
     with _lock:
-        row = _db().execute("SELECT favorites, hauls, updated_at FROM state WHERE user_id=?", (user_id,)).fetchone()
+        row = _db().execute("SELECT favorites, hauls, history, updated_at FROM state WHERE user_id=?", (user_id,)).fetchone()
     if not row:
-        return {"favorites": [], "hauls": [], "updatedAt": None}
-    try:
-        return {"favorites": json.loads(row["favorites"]), "hauls": json.loads(row["hauls"]), "updatedAt": row["updated_at"]}
-    except json.JSONDecodeError:
-        return {"favorites": [], "hauls": [], "updatedAt": row["updated_at"]}
+        return {"favorites": [], "hauls": [], "history": [], "updatedAt": None}
+    return {"favorites": _loads(row["favorites"]), "hauls": _loads(row["hauls"]), "history": _loads(row["history"]),
+            "updatedAt": row["updated_at"]}
 
 
-def set_state(user_id: int, favorites, hauls) -> dict:
-    """Replace the user's favorites and hauls (whole snapshot, last write wins)."""
+def set_state(user_id: int, favorites, hauls, history=None) -> dict:
+    """Replace the user's favorites, hauls and search history (whole snapshot, last write wins)."""
     favorites = [f for f in (favorites or []) if isinstance(f, dict)][:200]
     hauls = [h for h in (hauls or []) if isinstance(h, dict) and isinstance(h.get("items"), list)][:5]
-    fav_s, haul_s = json.dumps(favorites), json.dumps(hauls)
-    if len(fav_s) + len(haul_s) > MAX_STATE_BYTES:
+    history = [h for h in (history or []) if isinstance(h, dict) and isinstance(h.get("prompt"), str)][:7]
+    fav_s, haul_s, hist_s = json.dumps(favorites), json.dumps(hauls), json.dumps(history)
+    if len(fav_s) + len(haul_s) + len(hist_s) > MAX_STATE_BYTES:
         raise AuthError("Too much data to save.")
     now = time.time()
     with _lock:
         _db().execute(
-            "INSERT INTO state (user_id, favorites, hauls, updated_at) VALUES (?,?,?,?) "
-            "ON CONFLICT(user_id) DO UPDATE SET favorites=excluded.favorites, hauls=excluded.hauls, updated_at=excluded.updated_at",
-            (user_id, fav_s, haul_s, now))
+            "INSERT INTO state (user_id, favorites, hauls, history, updated_at) VALUES (?,?,?,?,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET favorites=excluded.favorites, hauls=excluded.hauls, "
+            "history=excluded.history, updated_at=excluded.updated_at",
+            (user_id, fav_s, haul_s, hist_s, now))
         _db().commit()
     return {"ok": True, "updatedAt": now}
