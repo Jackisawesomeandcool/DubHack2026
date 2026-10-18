@@ -4,6 +4,8 @@ check (vision). Standard library only; the key never leaves this process."""
 import json
 import re
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -37,19 +39,28 @@ class GeminiError(Exception):
 
 
 _model_override: dict[str, str] = {}  # model -> replacement Google told us to use
+_gate = threading.Semaphore(1)        # one Gemini call at a time: free tiers are per-minute limited
+_quota_blocked_until = 0.0            # after a hard quota error, stop calling for a while
+
+
+class QuotaError(GeminiError):
+    pass
 
 
 def _url(model: str) -> str:
     return f"{config.GEMINI_BASE_URL}/models/{model}:generateContent"
 
 
-def _post(model: str, payload: dict, timeout: int = 120) -> dict:
+def _post(model: str, payload: dict, timeout: int = 120, _retries: int = 2) -> dict:
+    global _quota_blocked_until
+    if time.time() < _quota_blocked_until:
+        raise QuotaError(f"Gemini quota exhausted; paused for {int(_quota_blocked_until - time.time())}s")
     model = _model_override.get(model, model)
     req = urllib.request.Request(_url(model), data=json.dumps(payload).encode("utf-8"),
                                  headers={"Content-Type": "application/json", "x-goog-api-key": config.GEMINI_API_KEY},
                                  method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _gate, urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as err:
         detail = err.read().decode("utf-8", "replace")
@@ -63,6 +74,14 @@ def _post(model: str, payload: dict, timeout: int = 120) -> dict:
             print(f"[gemini] model {model} unavailable; switching to {m.group(1)}", file=sys.stderr)
             _model_override[model] = m.group(1)
             return _post(model, payload, timeout)
+        if err.code == 429:
+            delay = re.search(r"retry in ([\d.]+)s|retryDelay\"?:\s*\"?(\d+)", detail, re.I)
+            wait = float(next((g for g in (delay.groups() if delay else ()) if g), 0) or 0)
+            if "billing" in message.lower() or "plan" in message.lower() or wait > 60 or _retries <= 0:
+                _quota_blocked_until = time.time() + max(wait, 300)
+                raise QuotaError(f"Gemini API returned 429 (quota): {message[:160]}") from err
+            time.sleep(max(wait, 8))
+            return _post(model, payload, timeout, _retries - 1)
         raise GeminiError(f"Gemini API returned {err.code}: {message[:200]}") from err
     except (urllib.error.URLError, TimeoutError) as err:
         raise GeminiError(f"Could not reach Gemini API: {err}") from err
@@ -106,13 +125,26 @@ def search_products(prompt: str, category: str | None, exclude: list[str], count
         "tools": [{"google_search": {}}],
         "generationConfig": {"temperature": 0.4},
     }
+    global _quota_blocked_until
     try:
         data = _parse_json(_text(_post(config.GEMINI_MODEL, payload)))
-    except GeminiError as err:
-        if "google_search" not in str(err) and "tool" not in str(err).lower():
+    except QuotaError as err:
+        if "tools" not in payload:
             raise
-        print(f"[gemini] search grounding unavailable ({err}); retrying without it", file=sys.stderr)
-        payload.pop("tools")
+        # Grounded search may be what's over quota; plain generation is a separate bucket.
+        print(f"[gemini] grounded search over quota ({err}); trying without grounding", file=sys.stderr)
+        _quota_blocked_until = 0.0
+        payload.pop("tools", None)
+        payload["generationConfig"]["responseMimeType"] = "application/json"
+        data = _parse_json(_text(_post(config.GEMINI_MODEL, payload)))
+    except GeminiError as err:
+        msg = str(err).lower()
+        if not any(k in msg for k in ("google_search", "tool", "grounding", "not supported", "invalid argument", "400")):
+            raise
+        # Grounding rejected on this plan/model: plain generation. Results are still
+        # verified downstream by fetching each product page and its photo.
+        print(f"[gemini] search grounding unavailable ({err}); generating without it", file=sys.stderr)
+        payload.pop("tools", None)
         payload["generationConfig"]["responseMimeType"] = "application/json"
         data = _parse_json(_text(_post(config.GEMINI_MODEL, payload)))
     items = normalize_list(data.get("items", []) if isinstance(data, dict) else data)

@@ -238,7 +238,10 @@ def warm(find) -> None:
                     print(f"[catalog] warmed '{term}' → {len(items)} items (catalog {count()})", file=sys.stderr)
                 except Exception as err:  # noqa: BLE001
                     print(f"[catalog] warm '{term}' failed: {err}", file=sys.stderr)
-                time.sleep(1.0)  # be gentle with the sources
+                    if "quota" in str(err).lower() or "429" in str(err):
+                        print("[catalog] warm-up paused — AI quota exhausted; will resume on next restart or search", file=sys.stderr)
+                        return
+                time.sleep(2.0)  # be gentle with the sources
         finally:
             with _lock:
                 _warming = False
