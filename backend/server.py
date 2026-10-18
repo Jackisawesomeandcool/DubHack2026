@@ -32,10 +32,7 @@ MAX_PROMPT = 400
 
 
 def _require_key(handler) -> bool:
-    if llm.configured():
-        return True
-    handler._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "GEMINI_API_KEY not configured"})
-    return False
+    return True  # free web search works without any AI key
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -138,7 +135,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/health":
             return self._json(HTTPStatus.OK, {
-                "key": llm.configured(),
+                "key": True,
+                "ai": llm.configured(),
                 "provider": llm.provider(),
                 "cutouts": cutouts.available(),
                 "catalog": catalog.count(),
@@ -195,7 +193,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    mode = f"AI: {llm.provider()} · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}" if llm.configured() else "NO KEY — set GEMINI_API_KEY in backend/.env"
+    mode = f"search: web{' + ' + llm.provider() if llm.configured() else ' (no AI key, free mode)'} · stores: {', '.join(config.ALLOWED_DOMAINS) or 'any'}"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
     print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER}")
     cutouts.warm()

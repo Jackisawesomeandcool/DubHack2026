@@ -113,8 +113,6 @@ def _refill() -> None:
 def ensure_pool() -> None:
     """Kick off background building if the pool is short."""
     global _refilling
-    if not llm.configured():
-        return
     with _lock:
         if _refilling or not _short_modes(_read()):
             return

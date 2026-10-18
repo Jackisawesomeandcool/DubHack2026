@@ -48,6 +48,9 @@ REMOVEBG_API_KEY = os.environ.get("REMOVEBG_API_KEY", "").strip()
 CUTOUT_PROVIDER = os.environ.get("CUTOUT_PROVIDER", "").strip().lower() or (
     "photoroom" if PHOTOROOM_API_KEY else "removebg" if REMOVEBG_API_KEY else "local")
 
+# Keyless web search endpoint (DuckDuckGo HTML). Overridable for tests.
+SEARCH_BASE_URL = os.environ.get("SEARCH_BASE_URL", "https://html.duckduckgo.com").rstrip("/")
+
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8000"))
 

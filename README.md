@@ -38,7 +38,7 @@ Two terminals.
 
 ```bash
 cd backend
-cp .env.example .env              # add your GEMINI_API_KEY
+cp .env.example .env              # optional: add GEMINI_API_KEY or XAI_API_KEY
 python3 server.py                 # needs only Pillow (installed automatically if missing)
 ```
 
@@ -98,7 +98,10 @@ the background (stored in `backend/data/fits.json`), so `GET /api/random-fit` re
 the pool refills after each one is used. Only the very first load on a fresh install waits for a live
 search (~10–40 s). Finder searches stream: the products appear in the tray as soon as Grok finds them (as shimmering placeholders), and each one fills in the moment its cutout is ready.
 
-A Gemini (or xAI) key is required; there is no offline mode.
+**No AI key needed.** Live search runs through a keyless web search (DuckDuckGo HTML, restricted to the
+allowed store) and each product page's JSON-LD for name / price / stock / photos. The "is there a person
+in this photo" check uses a skin-tone heuristic when no AI key is set. Add `GEMINI_API_KEY` or
+`XAI_API_KEY` to `.env` for AI-backed search and a vision model for the photo check.
 
 ## Production-style single process
 

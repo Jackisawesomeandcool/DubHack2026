@@ -83,11 +83,16 @@ def pick(candidates: list[bytes | None], allow_models: bool) -> int:
     allow_models=False: must show ONLY the product (no person).
     allow_models=True:  prefer the item worn on a model."""
     import llm
+    import people
     valid = [(i, raw) for i, raw in enumerate(candidates) if raw]
     if not valid:
         return -1
     if not llm.configured():
-        return valid[0][0]
+        # Free heuristic: skin-tone share decides "person present".
+        judged = [(i, people.has_person(raw)) for i, raw in valid]
+        if allow_models:
+            return next((i for i, p in judged if p), judged[0][0])
+        return next((i for i, p in judged if p is False), -1)
     if allow_models:
         ask = ("These are photos from one clothing listing. Which photo best shows the item worn on a model "
                "(full view, item clearly visible)? If none is on a model, pick the clearest full view of the item. "

@@ -18,6 +18,7 @@ import catalog
 import cutouts
 import llm
 import nike
+import websearch
 from products import normalize_list
 
 LIVE_COUNT = 6
@@ -40,6 +41,12 @@ def _live(prompt: str, category: str | None, exclude: list[str], count: int) -> 
         if items:
             print(f"[finder] nike.com search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
             return items, "nike"
+    items = normalize_list(websearch.search(prompt, category, exclude, count))
+    if items:
+        print(f"[finder] web search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
+        return items, "web"
+    if not llm.configured():
+        raise llm.LLMError("No listings found (web search) and no AI key configured")
     items = llm.search_products(prompt, category, exclude, count)
     print(f"[finder] {llm.provider()} search {time.time() - t0:.1f}s → {len(items)}", file=sys.stderr)
     return items, llm.provider()
