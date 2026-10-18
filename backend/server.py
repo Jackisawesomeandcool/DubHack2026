@@ -193,6 +193,35 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+def quality_sweep() -> None:
+    """Background: drop catalog cutouts that still show a person (local detector, no key)."""
+    import threading
+    from pathlib import Path
+
+    def run():
+        try:
+            import quality
+            if not quality.available():
+                return
+            with catalog._lock:
+                rows = catalog._db().execute("SELECT url, name, cutout_p FROM products WHERE cutout_p LIKE '/cutouts/%'").fetchall()
+            bad = []
+            for url, name, cp in rows:
+                ok, _ = quality.check_cutout(Path(config.DATA_DIR) / "cutouts" / Path(cp).name)
+                if not ok:
+                    bad.append(url)
+                    print(f"[quality] person in cutout, dropping: {name}", file=sys.stderr)
+            if bad:
+                with catalog._lock:
+                    catalog._db().executemany("UPDATE products SET cutout_p=NULL WHERE url=?", [(u,) for u in bad])
+                    catalog._db().commit()
+            print(f"[quality] checked {len(rows)} cutouts · {len(bad)} dropped", file=sys.stderr)
+        except Exception as err:  # noqa: BLE001
+            print(f"[quality] sweep failed: {err}", file=sys.stderr)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 def main() -> None:
     import gsearch
     live = [n for n, on in (("google", gsearch.configured()), ("web", config.WEB_SEARCH), (llm.provider(), llm.configured())) if on]
@@ -201,6 +230,7 @@ def main() -> None:
     print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER}")
     cutouts.warm()
     seed.warm()
+    quality_sweep()
     if gsearch.configured() or config.WEB_SEARCH or llm.configured():
         catalog.warm(lambda term, models: finder.find(term, models, local_first=False))
     stock.start()

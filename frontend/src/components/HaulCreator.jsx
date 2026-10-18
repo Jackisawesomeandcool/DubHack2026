@@ -53,7 +53,7 @@ export default function HaulCreator() {
       update(index, () => ({ items: withPositions(items) }));
       seen(items);
     } catch (err) {
-      setFitError(`couldn’t load a fit — ${err.message || 'try again'}`);
+      setFitError(`couldn’t load a haul — ${err.message || 'try again'}`);
     } finally {
       setLoadingFit(false);
     }

@@ -46,8 +46,9 @@ body {
   font-family: var(--font);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
-  overflow: hidden;
+  overflow: clip; /* clip, not hidden: focus/scrollIntoView can't shift the page */
 }
+html { overflow: clip; }
 
 button {
   font: inherit;
@@ -316,7 +317,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   pointer-events: none;
 }
 .item__art img {
-  max-height: calc(var(--u) * 44);
+  max-height: calc(var(--u) * 34);
   object-fit: contain;
   mix-blend-mode: multiply; /* white studio backgrounds dissolve into the board */
   animation: fade var(--mid) var(--ease);
@@ -875,3 +876,19 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .item.is-selected .item__art {
   filter: drop-shadow(0 22px 30px rgb(28 27 25 / 0.22));
 }
+
+/* total: red whenever the haul gets pricier, green when it gets cheaper */
+.total__value.is-up   { color: var(--out, #d12d2d); }
+.total__value.is-down { color: #1f8f4e; }
+
+/* share: pick hauls */
+.share__menu { min-width: 250px; }
+.share__head { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink-3); }
+.share__all { font-size: 12px; font-weight: 700; color: var(--ink); text-decoration: underline; }
+.share__pick { cursor: pointer; justify-content: flex-start; }
+.share__pick input { position: absolute; opacity: 0; width: 0; height: 0; }
+.share__pick small { margin-left: auto; white-space: nowrap; }
+.share__box { flex: none; width: 16px; height: 16px; border-radius: 5px; border: 2px solid var(--ink-3); transition: background var(--fast), border-color var(--fast); }
+.share__pick.is-on .share__box { background: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 3px #fff; }
+.share__go { display: block; width: 100%; margin-top: 6px; height: 40px; border-radius: 12px; background: var(--ink); color: #fff; font-weight: 700; }
+.share__go:disabled { opacity: 0.4; cursor: default; }

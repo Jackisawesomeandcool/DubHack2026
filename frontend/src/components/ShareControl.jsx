@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createShare } from '../lib/api.js';
-import { exportFits, fitLabel } from '../lib/haul.js';
+import { exportFits, fitLabel, fitTotal, formatPrice } from '../lib/haul.js';
 
-// SHARE -> choose this fit or all fits -> link is created and copied.
+// Share -> tick the hauls to include (current one pre-ticked) -> link is
+// created and copied. With a single haul there's nothing to choose, so the
+// link is made straight away.
 export default function ShareControl({ fits, current, disabled }) {
   const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState(() => new Set([current]));
   const [state, setState] = useState('idle'); // idle | busy | copied | link | error
   const [link, setLink] = useState('');
   const ref = useRef(null);
@@ -21,12 +24,13 @@ export default function ShareControl({ fits, current, disabled }) {
     return () => { window.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey); };
   }, [open]);
 
-  const filled = fits.filter((f) => f.items.length);
-  const currentHasItems = fits[current]?.items.length > 0;
+  const filledIdx = fits.map((f, i) => (f.items.length ? i : -1)).filter((i) => i >= 0);
+  const chosen = filledIdx.filter((i) => picked.has(i));
+  const allChosen = chosen.length === filledIdx.length;
 
   async function share(selection) {
     setOpen(false);
-    if (state === 'busy') return;
+    if (state === 'busy' || !selection.length) return;
     setState('busy');
     try {
       const { id } = await createShare(exportFits(selection));
@@ -45,8 +49,13 @@ export default function ShareControl({ fits, current, disabled }) {
   }
 
   function onClick() {
-    if (filled.length <= 1) return share(filled); // nothing to choose between
+    if (filledIdx.length <= 1) return share(filledIdx.map((i) => fits[i])); // nothing to choose between
+    if (!open) setPicked(new Set([current]));
     setOpen((o) => !o);
+  }
+
+  function toggle(i) {
+    setPicked((p) => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; });
   }
 
   const label = { idle: 'Share', busy: '…', copied: 'Link copied', link: 'Link ready', error: 'Try again' }[state];
@@ -58,18 +67,29 @@ export default function ShareControl({ fits, current, disabled }) {
         className={`share__btn${state === 'copied' ? ' is-done' : ''}${open ? ' is-open' : ''}`}
         onClick={onClick}
         disabled={disabled || state === 'busy'}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-expanded={open}
       >
         {label}
       </button>
       {open && (
-        <div className="share__menu" role="menu">
-          <button type="button" role="menuitem" className="share__opt" disabled={!currentHasItems} onClick={() => share([fits[current]])}>
-            <span>This fit</span><small>{fitLabel(current)}</small>
-          </button>
-          <button type="button" role="menuitem" className="share__opt" onClick={() => share(fits)}>
-            <span>All fits</span><small>{filled.length} fits</small>
+        <div className="share__menu" role="dialog" aria-label="Choose hauls to share">
+          <div className="share__head">
+            <span>Share which hauls?</span>
+            <button type="button" className="share__all" onClick={() => setPicked(new Set(allChosen ? [] : filledIdx))}>
+              {allChosen ? 'none' : 'all'}
+            </button>
+          </div>
+          {filledIdx.map((i) => (
+            <label key={i} className={`share__opt share__pick${picked.has(i) ? ' is-on' : ''}`}>
+              <input type="checkbox" checked={picked.has(i)} onChange={() => toggle(i)} />
+              <span className="share__box" aria-hidden="true" />
+              <span>{fitLabel(i)}{i === current ? ' · current' : ''}</span>
+              <small>{fits[i].items.length} pieces · {formatPrice(fitTotal(fits[i]))}</small>
+            </label>
+          ))}
+          <button type="button" className="share__go" disabled={!chosen.length} onClick={() => share(chosen.map((i) => fits[i]))}>
+            {chosen.length ? `Copy link · ${chosen.length} haul${chosen.length > 1 ? 's' : ''}` : 'Pick at least one'}
           </button>
         </div>
       )}
