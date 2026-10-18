@@ -67,26 +67,49 @@ def sitemap_urls() -> list[str]:
 
 
 _KIDS = ("kids", "baby", "toddler", "little-kids", "big-kids", "infant")
+# League / team / college merchandise: kept, but capped (see --merch) and tagged so "college", "nba", "sporty" prompts find it.
+_MERCH_WORDS = {"nfl", "mlb", "nba", "wnba", "nhl", "mls", "ncaa", "college", "sideline", "fc", "jersey", "jerseys",
+                "usmnt", "uswnt", "fanatics", "authentic", "rivalries", "swingman", "replica"}
+_MERCH_PHRASES = ("standard-issue", "city-connect", "city-edition", "dress-code", "white-out", "national-team")
 
 
-def sample(urls: list[str], per_category: int, seed: int = 7, kids: bool = False) -> list[tuple[str, str]]:
-    """Round-robin across categories so a small --limit still gives variety."""
+def is_merch(slug: str) -> bool:
+    s = slug.lower()
+    return bool(set(s.split("-")) & _MERCH_WORDS) or any(p in s for p in _MERCH_PHRASES)
+
+
+MERCH_SHARE = 0.2  # with --merch some: about this fraction of each category is team/college merchandise
+
+
+def sample(urls: list[str], per_category: int, seed: int = 7, kids: bool = False, merch: str = "some") -> list[tuple[str, str]]:
+    """Round-robin across categories so a small --limit still gives variety.
+    merch: "some" (default, ~20% merchandise per category), "none", or "all" (no cap)."""
     rng = random.Random(seed)
-    buckets: dict[str, list[str]] = {c: [] for c in CATEGORIES}
+    core: dict[str, list[str]] = {c: [] for c in CATEGORIES}
+    team: dict[str, list[str]] = {c: [] for c in CATEGORIES}
     for u in urls:
         slug = u.rsplit("/t/", 1)[1].split("/")[0]
         if not kids and any(k in slug.lower().split("-") for k in _KIDS):
             continue
         cat = infer_category(slug)
         if cat:
-            buckets[cat].append(u)
-    for b in buckets.values():
+            (team if is_merch(slug) else core)[cat].append(u)
+    for b in list(core.values()) + list(team.values()):
         rng.shuffle(b)
     out: list[tuple[str, str]] = []
+    picked: dict[str, list[str]] = {}
+    for cat in CATEGORIES:
+        want_team = 0 if merch == "none" else per_category if merch == "all" else round(per_category * MERCH_SHARE)
+        t = team[cat][:want_team]
+        c = core[cat][: per_category - len(t)]
+        chosen = c + t
+        if merch != "none" and len(chosen) < per_category:  # short on core items: top up with more merchandise
+            chosen += team[cat][len(t): len(t) + per_category - len(chosen)]
+        picked[cat] = chosen[:per_category]
     for i in range(per_category):
         for cat in CATEGORIES:
-            if i < len(buckets[cat]):
-                out.append((cat, buckets[cat][i]))
+            if i < len(picked[cat]):
+                out.append((cat, picked[cat][i]))
     return out
 
 
@@ -163,9 +186,21 @@ def ingest_one(cat: str, url: str, models: bool) -> bool:
         it = dict(item)
         cutouts.resolve(it, mode)
         if it.get("image"):
-            catalog.upsert([it], mode, query=item["name"], source="sitemap")
+            catalog.upsert([it], mode, query=item["name"] + (" team merch sports fan" if is_merch(url.rsplit("/t/", 1)[-1].split("/")[0]) else ""), source="sitemap")
             ok = True
     return ok
+
+
+def apply_shard(plan: list, spec: str) -> list:
+    """'2/3' -> every third entry starting at the second. Same flags on every machine = disjoint slices."""
+    if not spec:
+        return plan
+    try:
+        i, n = (int(x) for x in spec.split("/"))
+        assert 1 <= i <= n
+    except (ValueError, AssertionError):
+        sys.exit("--shard must look like 2/3 (slice 2 of 3)")
+    return plan[i - 1::n]
 
 
 def main() -> None:
@@ -176,11 +211,25 @@ def main() -> None:
     ap.add_argument("--delay", type=float, default=1.5, help="seconds between products")
     ap.add_argument("--models", action="store_true", help="also build on-model cutouts")
     ap.add_argument("--kids", action="store_true", help="include kids' / baby items")
+    ap.add_argument("--merch", choices=["some", "none", "all"], default="some", help="team/college merchandise: ~20%% per category (some, default), none, or all")
+    ap.add_argument("--purge-merch", action="store_true", help="delete already-stored merchandise (source=sitemap) and exit")
+    ap.add_argument("--shard", default="", help="i/n: do only slice i of n (1-based) so teammates scrape different products; everyone must use the same other flags")
     ap.add_argument("--ai", action="store_true", help="use configured AI keys for photo choice")
     args = ap.parse_args()
 
+    if args.purge_merch:
+        with catalog._lock:
+            db = catalog._db()
+            rows = db.execute("SELECT url FROM products WHERE source='sitemap'").fetchall()
+            bad = [r["url"] for r in rows if is_merch(r["url"].rsplit("/t/", 1)[-1].split("/")[0])]
+            db.executemany("DELETE FROM products WHERE url=?", [(u,) for u in bad])
+            db.execute("DELETE FROM results")  # cached searches may point at removed rows
+            db.commit()
+        print(f"purged {len(bad)} merchandise products; catalog now {catalog.count()} items")
+        return
+
     urls = sitemap_urls()
-    plan = sample(urls, args.per_category, kids=args.kids)
+    plan = apply_shard(sample(urls, args.per_category, kids=args.kids, merch=args.merch), args.shard)
     counts = {c: sum(1 for k, _ in plan if k == c) for c in CATEGORIES}
     print(f"sitemap: {len(urls)} product URLs; planned {len(plan)}: {counts}")
     if args.dry_run:
