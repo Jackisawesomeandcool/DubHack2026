@@ -37,6 +37,42 @@ SYN = {
 STOP = {"a", "an", "the", "and", "or", "with", "for", "in", "on", "of", "to", "fit", "look", "outfit", "style",
         "mens", "womens", "men", "women", "some", "me", "find", "show", "want", "need", "please", "i", "something"}
 
+# Filler that names no product ("comfortable clothes", "fall aesthetic"); ignored when matching.
+FILLER = {"clothes", "clothing", "clothe", "apparel", "wear", "gear", "stuff", "things", "pieces", "items", "outfits",
+          "looks", "aesthetic", "aesthetics", "vibe", "vibes", "trendy", "cute", "nice", "good", "best", "season",
+          "seasonal", "inspo", "ideas", "popular", "new"}
+STOP |= FILLER
+
+# Subjective words → words that appear in catalog product names/tags that fit the mood. Used by the keyword
+# ranker (no-AI fallback); the AI ranker reads the same idea from its prompt. Stems, lowercase.
+_COMFY = {"fleece", "plush", "soft", "impossiblysoft", "club", "sweatshirt", "hoodie", "jogger", "sweatpant", "loose",
+          "oversized", "relaxed", "pullover", "crew", "tee", "basic", "everyday", "short", "beanie", "therma", "lounge",
+          "knit", "cozy", "full", "zip"}
+_COLD = {"fleece", "therma", "jacket", "windrunner", "bomber", "anorak", "vest", "hoodie", "sweatshirt", "pullover",
+         "beanie", "glove", "woven", "repel", "puffer", "down", "denim", "corduroy", "utility", "shell", "heattech",
+         "long", "coach", "parka", "coat", "sherpa", "flannel", "acg", "tech", "zip", "hooded"}
+_SPORT = {"dri", "training", "running", "track", "sportswear", "tech", "flow", "metcon", "zoom", "basketball", "soccer",
+          "short", "tank", "jogger", "pegasus", "vomero", "speed", "academy", "strike", "jersey", "performance", "air",
+          "max", "run", "road", "swoosh", "sport", "sports", "gym", "athletic", "football"}
+_STREET = {"graphic", "denim", "loose", "cargo", "baggy", "jordan", "dunk", "stussy", "tears", "oversized", "bomber",
+           "heritage", "classic", "force", "trucker", "tee"}
+VIBES = {
+    "comfortable": _COMFY, "comfy": _COMFY, "cozy": _COMFY, "soft": _COMFY, "relaxed": _COMFY, "lounge": _COMFY,
+    "loungewear": _COMFY, "casual": _COMFY | {"club", "classic"}, "chill": _COMFY, "everyday": _COMFY,
+    "fall": _COLD, "autumn": _COLD, "chilly": _COLD, "cold": _COLD, "winter": _COLD, "layer": _COLD, "layering": _COLD,
+    "warm": _COLD,
+    "athletic": _SPORT, "athleisure": _SPORT | _COMFY, "sporty": _SPORT, "sport": _SPORT, "sports": _SPORT,
+    "workout": _SPORT, "gym": _SPORT, "training": _SPORT, "active": _SPORT, "activewear": _SPORT, "performance": _SPORT,
+    "sportswear": _SPORT, "running": _SPORT | {"road"}, "run": _SPORT, "runner": _SPORT,
+    "streetwear": _STREET, "street": _STREET, "urban": _STREET, "skate": _STREET, "skater": _STREET, "hype": _STREET,
+    "basics": {"basic", "tee", "crew", "everyday", "classic", "polo", "heattech", "uniqlo"},
+    "minimal": {"basic", "tee", "crew", "classic", "everyday", "uniqlo"}, "simple": {"basic", "tee", "crew", "classic"},
+}
+# brand a mood leans toward (matched against the brand field, lowercase, ü stripped)
+VIBE_BRANDS = {"streetwear": {"stussy"}, "street": {"stussy"}, "skate": {"stussy"}, "skater": {"stussy"},
+               "urban": {"stussy"}, "hype": {"stussy", "jordan"}, "basics": {"uniqlo"}, "minimal": {"uniqlo"},
+               "simple": {"uniqlo"}, "athletic": {"nike"}, "sporty": {"nike"}, "workout": {"nike"}, "gym": {"nike"}}
+
 # canonical color → words that count as that color in a product name / tags
 COLORS = {
     "black": {"black", "anthracite"},
@@ -121,9 +157,14 @@ def _norm(s: str) -> str:
 
 
 def item_colors(item: dict) -> set[str]:
-    """Canonical colors mentioned in an item's name / tags."""
-    words = set(_WORD.findall(f"{item.get('name', '')} {item.get('tags', '')}".lower()))
-    return {COLOR_WORD[w] for w in words if w in COLOR_WORD}
+    """Canonical colors of an item. Once colors.py has read the product image (`color` field), the
+    colors are the picture's plus any the name states; tags are ignored then, because they can list
+    every colorway the product comes in (Uniqlo) while the cutout shows only one. Until the image has
+    been read, the name and tags decide."""
+    own = {c for c in (item.get("color") or "").split() if c in COLORS}
+    text = item.get("name", "") if own else f"{item.get('name', '')} {item.get('tags', '')}"
+    words = set(_WORD.findall(text.lower()))
+    return own | {COLOR_WORD[w] for w in words if w in COLOR_WORD}
 
 
 def matches(item: dict, intent: Intent) -> bool:

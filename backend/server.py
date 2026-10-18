@@ -24,6 +24,7 @@ import cutouts
 import finder
 import fits
 import llm
+import colors
 import seed
 import stock
 import store
@@ -278,10 +279,11 @@ def main() -> None:
     ranker_name = llm.provider() if llm.configured() else "keywords (set GEMINI_API_KEY for AI picks)"
     mode = f"catalog search · ranked by {ranker_name}"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
-    print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER}")
+    print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER} · {colors.progress()}")
     cutouts.warm()
     seed.warm()
     quality_sweep()
+    colors.sweep()          # background: read each product's color from its image (see colors.py)
     # (no catalog warm-up: search is catalog-only, nothing to pre-fetch)
     stock.start()
     fits.ensure_pool()

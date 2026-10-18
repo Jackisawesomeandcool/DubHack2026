@@ -2,7 +2,7 @@
 
 Given the shopper's request and the catalog products that survive the hard
 filters (intent.py), the LLM chooses and orders the best matches. It sees
-compact lines — number, brand, name, price, category — and returns numbers,
+compact lines — number, brand, name, price, category, color — and returns numbers,
 so it can only pick real products; every pick is re-checked against the hard
 filters afterwards. No LLM key (or an LLM error) → keyword ranking instead.
 
@@ -23,7 +23,7 @@ MAX_CANDIDATES = 600     # ~15 tokens per line; well inside any current model's 
 
 def _line(n: int, it: dict) -> str:
     price = f"${it['price']:.0f}" if it.get("price") else "price n/a"
-    return f"{n} | {it['brand']} | {it['name']} | {price} | {it['category']}"
+    return f"{n} | {it['brand']} | {it['name']} | {price} | {it['category']} | {it.get('color') or '-'}"
 
 
 def _trim(it: Intent, pool: list[dict], models: bool, exclude: list[str]) -> list[dict]:
@@ -64,7 +64,12 @@ def rank(prompt: str, it: Intent, pool: list[dict], count: int, models: bool, ex
             print(f"[ranker]   {item['name']} — {p['why']}", file=sys.stderr)
         if len(out) >= count:
             break
+    print(f"[ranker] {llm.provider()} {time.time() - t0:.1f}s · {len(pool)} candidates → {len(out)} picks", file=sys.stderr)
+    if not out:
+        # The AI named nothing usable (empty list, or numbers outside the list). The catalog does have
+        # candidates within the hard filters, so fall back rather than show an empty tray.
+        print(f"[ranker] {llm.provider()} returned no usable picks ({len(picks)} raw); keyword ranking", file=sys.stderr)
+        return catalog.search(it, models, exclude, limit=count), "keywords"
     if it.sort == "price_asc":
         out.sort(key=lambda i: i.get("price") or 1e9)
-    print(f"[ranker] {llm.provider()} {time.time() - t0:.1f}s · {len(pool)} candidates → {len(out)} picks", file=sys.stderr)
     return out, llm.provider()

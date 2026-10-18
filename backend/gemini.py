@@ -158,17 +158,26 @@ def search_products(prompt: str, category: str | None, exclude: list[str], count
 PICK_SYSTEM = """You are a personal shopper choosing from a store's own catalog. You never chat or explain.
 
 You get a shopper's request and a numbered list of the products available (brand, name, price,
-category). Pick the products that best answer the request, best first.
+category, color — read from the product photo, "-" if unknown). Pick the products that best answer the request, best first.
 
 Rules:
 - Use only the numbers in the list. Never invent products.
 - Judge by what the names tell you: product line, garment type, material (fleece, down, shell,
   denim, corduroy), fit, season cues (therma, windrunner, puffer = cold; shorts, tank = warm),
   colorway words, sport, and brand style (Stüssy = streetwear, Uniqlo = basics, Nike = athletic).
-- If the request describes a whole outfit or "fit", pick a coherent mix across categories (one
-  top, one bottom, shoes, plus outerwear/headwear/bag if they fit) rather than six of one kind.
+- Moods and seasons are NOT in the product names, so translate them: "comfortable/cozy/casual" =
+  fleece, plush, joggers, sweatpants, hoodies, club, loose or oversized fits, soft knits; "fall/autumn"
+  = layers and cold-weather pieces (jackets, fleece, Therma-FIT, windrunner, bombers, vests, hoodies,
+  long sleeves, beanies, boots, earth tones); "athletic/sporty/gym" = Dri-FIT, training, running,
+  track, performance shorts/tops/shoes; "streetwear" = Stüssy, Jordan, graphic, denim, baggy, cargo.
+  Combine them: "fall athletic" = cold-weather performance pieces (Therma-FIT, fleece joggers, track
+  jackets, running shoes).
+- If the request describes a whole outfit, a "fit", or only a mood/season/style (no single garment
+  type), pick a coherent mix across categories (top, bottom, shoes, plus outerwear/headwear/bag where
+  they fit) rather than six of one kind.
 - Otherwise pick the closest matches; vary models rather than listing near-duplicates.
-- Pick fewer than asked if fewer truly fit. Pick none if nothing fits.
+- The list is already limited to what the shopper may buy, so ALWAYS return picks: choose the closest
+  matches even when none is perfect. Return an empty list only if the request is gibberish.
 Reply with ONLY a JSON object: {"picks": [{"n": <number>, "why": "<one short line>"}]}"""
 
 
@@ -179,9 +188,17 @@ def pick_products(prompt: str, lines: list[str], count: int) -> list[dict]:
     payload = {
         "systemInstruction": {"parts": [{"text": PICK_SYSTEM}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
-        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
+        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json", "maxOutputTokens": 2048},
     }
-    data = _parse_json(_text(_post(config.GEMINI_MODEL, payload, timeout=45)))
+    text = _text(_post(config.GEMINI_MODEL, payload, timeout=45))
+    try:
+        data = _parse_json(text)
+    except GeminiError:
+        # Truncated or chatty reply: salvage the numbers that were written ({"n": 12, ...}).
+        nums = re.findall(r'"n"\s*:\s*(\d+)', text)
+        if not nums:
+            raise
+        data = {"picks": [{"n": int(n)} for n in nums]}
     picks = data.get("picks", []) if isinstance(data, dict) else data
     out = []
     for p in picks if isinstance(picks, list) else []:
@@ -190,6 +207,31 @@ def pick_products(prompt: str, lines: list[str], count: int) -> list[dict]:
         except (KeyError, TypeError, ValueError):
             continue
     return out
+
+
+def product_color(jpeg: bytes, allowed: list[str]) -> list[str]:
+    """Vision: the garment's color(s) from a product photo, dominant first, limited to `allowed`.
+    Raises GeminiError / QuotaError."""
+    import base64
+    prompt = ("Which colors is the product in this photo? Answer for the garment/item itself: ignore the "
+              "white background, skin, hands, small logos, laces, soles and stitching. Choose only from: "
+              + ", ".join(allowed) + ". Dominant color first; give a second color only if it covers a large "
+              "part of the item (two-tone), a third only if it is truly multicolor. "
+              'Reply with ONLY JSON: {"colors": ["..."]}')
+    payload = {
+        "contents": [{"role": "user", "parts": [
+            {"text": prompt},
+            {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(jpeg).decode("ascii")}}]}],
+        "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "maxOutputTokens": 256},
+    }
+    data = _parse_json(_text(_post(config.GEMINI_VISION_MODEL, payload, timeout=60)))
+    raw = data.get("colors", []) if isinstance(data, dict) else data
+    out: list[str] = []
+    for c in raw if isinstance(raw, list) else []:
+        c = str(c).strip().lower().replace("gray", "grey")
+        if c in allowed and c not in out:
+            out.append(c)
+    return out[:3]
 
 
 def pick_index(question: str, jpeg_blobs: list[bytes]) -> int:

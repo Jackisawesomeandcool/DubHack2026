@@ -40,7 +40,7 @@ REMOVED = DIR / "removed.json"
 IMG = DIR / "cutouts"
 LOCAL_IMG = Path(config.DATA_DIR) / "cutouts"
 MAX_SIDE = 900
-FIELDS = ["url", "name", "brand", "price", "category", "tags", "cutout_p", "cutout_m", "stock", "source", "last_checked", "added_at"]
+FIELDS = ["url", "name", "brand", "price", "category", "tags", "cutout_p", "cutout_m", "stock", "source", "last_checked", "added_at", "color", "color_src"]
 
 
 # ---------------------------------------------------------------- files
@@ -108,9 +108,15 @@ def export(quiet: bool = False) -> dict:
         row = {k: r[k] for k in FIELDS}
         row["cutout_p"], row["cutout_m"] = cp, cm
         old = items.get(r["url"])
+        if old and old.get("color") and (not row.get("color") or (
+                old.get("color_src") == "vision" and row.get("color_src") != "vision")):
+            row["color"], row["color_src"] = old["color"], old.get("color_src")   # never lose a better shared color
         if old is None:
             stats["added"] += 1
         elif (old.get("last_checked") or 0) > (r["last_checked"] or 0) and old.get("cutout_p") == cp:
+            if row.get("color") and old.get("color") != row["color"]:
+                items[r["url"]] = {**old, "color": row["color"], "color_src": row.get("color_src")}
+                stats["updated"] += 1
             continue                                       # dataset copy is newer and identical image: keep it
         elif old != row:
             stats["updated"] += 1
@@ -190,6 +196,10 @@ def load(quiet: bool = False) -> dict:
             tags = set((row["tags"] or "").split()) | set((it.get("tags") or "").split())
             if tags != set((row["tags"] or "").split()):
                 upd["tags"] = " ".join(sorted(tags))
+            # colors are computed once by whoever runs the server first and shared through the dataset;
+            # an AI-verified color replaces a pixel guess, never the other way round
+            if it.get("color") and (not row["color"] or (it.get("color_src") == "vision" and row["color_src"] != "vision")):
+                upd["color"], upd["color_src"] = it["color"], it.get("color_src")
             if (it.get("last_checked") or 0) > (row["last_checked"] or 0):
                 for c in ("stock", "price", "last_checked"):
                     if it.get(c) is not None and it[c] != row[c]:

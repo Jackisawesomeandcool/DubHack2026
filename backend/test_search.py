@@ -190,7 +190,8 @@ class StubLLM:
             raise llm.LLMError("stub down")
         out = []
         for ln in lines:
-            n, _, name, _, _ = [x.strip() for x in ln.split(" | ")]
+            parts = [x.strip() for x in ln.split(" | ")]
+            n, name = parts[0], " | ".join(parts[2:-3])     # names may contain ' | '
             if self.want in name.lower():
                 out.append({"n": int(n), "why": "stub"})
             if len(out) >= count:
@@ -270,8 +271,261 @@ class Finder(unittest.TestCase):
         self.assertTrue(items and all(i["category"] == "bottom" for i in items))
         self.assertTrue(any(i["brand"] != "Stüssy" for i in stub_pool(stub)), "swap pool is not brand-locked")
 
+    def test_mood_queries_return_mixed_results_without_llm(self):
+        for q in ("comfortable clothes", "fall athletic", "fall aesthetic", "cozy fall outfit"):
+            with self.subTest(q=q):
+                items = finder.results(q)
+                self.assertGreaterEqual(len(items), 4)
+                self.assertGreaterEqual(len({i["category"] for i in items}), 2, "a mood returns a mix, not one kind")
+
+    def test_fall_athletic_prefers_cold_weather_performance_pieces(self):
+        names = " ".join(i["name"].lower() for i in finder.results("fall athletic"))
+        self.assertTrue(any(w in names for w in ("therma", "fleece", "windrunner", "woven", "dri-fit")))
+
+    def test_mood_keeps_hard_filters(self):
+        items = finder.results("comfortable shoes under 100 dollars")
+        self.assertTrue(items and all(i["category"] == "shoes" and i["price"] <= 100 for i in items))
+
+    def test_gibberish_still_matches_nothing(self):
+        with self.assertRaises(finder.NoMatch):
+            finder.results("xyzzy qwerty")
+
+    def test_ai_empty_answer_falls_back_to_keywords(self):
+        with StubLLM(want="no-such-product-zzz") as stub:       # the AI returns no picks at all
+            items = finder.results("comfortable clothes")
+        self.assertEqual(len(stub.calls), 1)
+        self.assertTrue(items, "an empty AI answer must not produce an empty tray")
+
+    def test_ai_error_falls_back_to_keywords_for_moods(self):
+        with StubLLM(fail=True):
+            self.assertTrue(finder.results("fall athletic"))
+
+    def test_gemini_salvages_truncated_json(self):
+        import gemini
+        post, text = gemini._post, gemini._text
+        gemini._post = lambda *a, **k: {}
+        gemini._text = lambda _r: '{"picks": [{"n": 3, "why": "cozy"}, {"n": 7, "why": "soft fl'
+        try:
+            self.assertEqual([p["n"] for p in gemini.pick_products("cozy", ["1 | a | b | $1 | top"], 6)], [3, 7])
+        finally:
+            gemini._post, gemini._text = post, text
+
     def test_find_swallows_no_match(self):
         self.assertEqual(finder.find("shoes under 1 dollar"), [])
+
+
+class Colors(unittest.TestCase):
+    """colors.py (pixel pass), the color column and color search."""
+
+    def setUp(self):
+        load_dataset()
+        import colors
+        self.colors = colors
+
+    def _img(self, parts, size=(80, 80)):
+        """PNG with transparent background; parts = [(rgb, x0, x1)] vertical bands."""
+        from PIL import Image
+        im = Image.new("RGBA", size, (0, 0, 0, 0))
+        for rgb, x0, x1 in parts:
+            im.paste(Image.new("RGBA", (x1 - x0, size[1]), (*rgb, 255)), (x0, 0))
+        path = Path(tempfile.mkdtemp()) / "x.png"
+        im.save(path)
+        return path
+
+    def test_pixel_solid_colors(self):
+        for rgb, want in (((20, 120, 40), "green"), ((10, 10, 10), "black"), ((250, 250, 250), "white"),
+                          ((200, 30, 30), "red"), ((30, 40, 110), "blue"), ((255, 105, 180), "pink"),
+                          ((128, 128, 128), "grey"), ((120, 80, 40), "brown"), ((235, 220, 190), "beige")):
+            with self.subTest(want=want):
+                self.assertEqual(self.colors.from_pixels(self._img([(rgb, 0, 80)])), [want])
+
+    def test_pixel_ignores_transparent_background_and_small_trim(self):
+        # 90% navy shirt, 10% white trim, transparent corners: navy only
+        got = self.colors.from_pixels(self._img([((30, 40, 110), 0, 72), ((250, 250, 250), 72, 80)]))
+        self.assertEqual(got, ["blue"])
+
+    def test_pixel_two_tone_keeps_both(self):
+        got = self.colors.from_pixels(self._img([((30, 40, 110), 0, 48), ((240, 120, 20), 48, 80)]))
+        self.assertEqual(got, ["blue", "orange"])
+
+    def test_pixel_unreadable_or_empty_image(self):
+        self.assertEqual(self.colors.from_pixels(Path("/nonexistent.png")), [])
+        self.assertEqual(self.colors.from_pixels(self._img([])), [])
+
+    def test_color_field_is_matched_and_name_colors_still_count(self):
+        green = {"name": "Nike Pegasus 41", "tags": "", "category": "shoes", "price": 100, "color": "green white"}
+        named = {"name": "Nike Dunk Low Olive", "tags": "", "category": "shoes", "price": 100, "color": ""}
+        other = {"name": "Nike Pegasus 41", "tags": "", "category": "shoes", "price": 100, "color": "black"}
+        it = parse("green shoes")
+        self.assertTrue(matches(green, it) and matches(named, it) and not matches(other, it))
+
+    def test_tag_colors_ignored_once_the_image_was_read(self):
+        cardigan = {"name": "Merino Cardigan", "tags": "black blue pink purple", "category": "top", "price": 40, "color": "grey"}
+        unread = {**cardigan, "color": ""}
+        self.assertFalse(matches(cardigan, parse("pink")))          # the picture is grey, whatever else it comes in
+        self.assertTrue(matches(cardigan, parse("grey")))
+        self.assertTrue(matches(unread, parse("pink")))             # no image color yet: tags still count
+
+    def test_search_uses_the_color_column(self):
+        with catalog._lock:
+            row = catalog._db().execute("SELECT url, name FROM products WHERE category='shoes' AND name NOT LIKE '%green%' LIMIT 1").fetchone()
+        catalog.set_color(row["url"], ["green", "white"], "vision")
+        items = finder.results("green shoes")
+        self.assertIn(row["name"], [i["name"] for i in items])
+        self.assertTrue(all("green" in intent.item_colors(i) for i in items))
+        with self.assertRaises(finder.NoMatch):
+            finder.results("purple socks under 3 dollars")
+
+    def test_set_color_invalidates_nothing_stale(self):
+        # results cached before colors existed use another key version
+        self.assertTrue(catalog.KEY_VERSION >= "v3")
+
+    def test_pixel_pass_fills_missing_colors_from_real_cutouts(self):
+        import shutil
+        (config.DATA_DIR / "cutouts").mkdir(exist_ok=True)
+        with catalog._lock:
+            rows = catalog._db().execute("SELECT url, cutout_p FROM products WHERE stock='in_stock' LIMIT 6").fetchall()
+        done = 0
+        for r in rows:
+            src = HERE / "dataset" / "cutouts" / Path(r["cutout_p"]).name
+            if src.exists():
+                shutil.copy2(src, config.DATA_DIR / "cutouts" / src.name)
+                done += 1
+        self.assertGreater(done, 0)
+        n = self.colors.pixel_pass()
+        self.assertGreaterEqual(n, done)
+        with catalog._lock:
+            got = catalog._db().execute("SELECT color, color_src FROM products WHERE color IS NOT NULL").fetchall()
+        self.assertTrue(got and all(g["color_src"] == "pixel" and g["color"] for g in got))
+
+    def test_old_database_gets_color_columns(self):
+        import sqlite3
+        old = Path(tempfile.mkdtemp()) / "old.sqlite"
+        db = sqlite3.connect(old)
+        db.execute("CREATE TABLE products (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, name TEXT NOT NULL, brand TEXT NOT NULL, "
+                   "price REAL NOT NULL, category TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '', cutout_p TEXT, cutout_m TEXT, "
+                   "stock TEXT NOT NULL DEFAULT 'in_stock', source TEXT, last_checked REAL, added_at REAL)")
+        db.execute("INSERT INTO products (url,name,brand,price,category) VALUES ('u','n','b',1,'top')")
+        db.commit()
+        db.close()
+        saved = catalog._conn, catalog.DB_PATH
+        try:
+            catalog._conn, catalog.DB_PATH = None, old
+            cols = {r[1] for r in catalog._db().execute("PRAGMA table_info(products)")}
+            self.assertTrue({"color", "color_src"} <= cols)
+            self.assertEqual(catalog._db().execute("SELECT COUNT(*) FROM products").fetchone()[0], 1)
+        finally:
+            catalog._conn.close()
+            catalog._conn, catalog.DB_PATH = saved
+
+    def test_ranker_line_carries_color(self):
+        line = ranker._line(3, {"brand": "Nike", "name": "Pegasus", "price": 120, "category": "shoes", "color": "green"})
+        self.assertEqual(line, "3 | Nike | Pegasus | $120 | shoes | green")
+        self.assertTrue(ranker._line(1, {"brand": "a", "name": "b", "price": 0, "category": "top"}).endswith("| -"))
+
+    def test_gemini_vision_answer_is_limited_to_known_colors(self):
+        import gemini
+        post, text = gemini._post, gemini._text
+        gemini._post = lambda *a, **k: {}
+        gemini._text = lambda _r: '{"colors": ["Gray", "sparkly", "white", "grey"]}'
+        try:
+            self.assertEqual(gemini.product_color(b"x", self.colors.CANON), ["grey", "white"])
+        finally:
+            gemini._post, gemini._text = post, text
+
+    def _vision_env(self, from_vision):
+        import llm
+        c = self.colors
+        self._saved = (c.from_vision, c._file, c.VISION_PAUSE, llm.provider)
+        c.from_vision, c._file, c.VISION_PAUSE, llm.provider = from_vision, (lambda cutout: Path("x.png") if cutout else None), 0, (lambda: "gemini")
+
+    def _vision_restore(self):
+        import llm
+        c = self.colors
+        c.from_vision, c._file, c.VISION_PAUSE, llm.provider = self._saved
+
+    def test_vision_pass_overwrites_pixel_guess_and_resumes(self):
+        with catalog._lock:
+            catalog._db().execute("UPDATE products SET color='black', color_src='pixel'")
+            catalog._db().commit()
+        self._vision_env(lambda f: ["green"])
+        try:
+            done, why = self.colors.vision_pass()
+            self.assertEqual(why, "complete")
+            with catalog._lock:
+                srcs = {r[0] for r in catalog._db().execute("SELECT color_src FROM products WHERE stock='in_stock' AND (cutout_p IS NOT NULL OR cutout_m IS NOT NULL)")}
+            self.assertEqual(srcs, {"vision"})
+            self.assertEqual(self.colors.vision_pass(), (0, "complete"), "already verified products are not asked again")
+        finally:
+            self._vision_restore()
+
+    def test_vision_pass_stops_on_quota_and_keeps_progress(self):
+        import gemini
+        n = {"calls": 0}
+
+        def flaky(f):
+            n["calls"] += 1
+            if n["calls"] > 3:
+                raise gemini.QuotaError("quota")
+            return ["blue"]
+        with catalog._lock:
+            catalog._db().execute("UPDATE products SET color=NULL, color_src=NULL")
+            catalog._db().commit()
+        self._vision_env(flaky)
+        try:
+            self.assertEqual(self.colors.vision_pass(), (3, "quota"))
+            with catalog._lock:
+                self.assertEqual(catalog._db().execute("SELECT COUNT(*) FROM products WHERE color_src='vision'").fetchone()[0], 3)
+        finally:
+            self._vision_restore()
+
+    def test_no_key_means_no_vision_calls(self):
+        import llm
+        self.assertEqual(self.colors.vision_pass(), (0, "no-key"))
+
+    def test_dataset_load_and_export_share_colors(self):
+        import dataset
+        from PIL import Image
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "cutouts").mkdir()
+        Image.new("RGBA", (20, 20), (20, 120, 40, 255)).save(tmp / "cutouts" / "aaaaaaaaaaaaaaaa.png")
+        saved = (dataset.DIR, dataset.ITEMS, dataset.REMOVED, dataset.IMG, dataset.LOCAL_IMG)
+        dataset.DIR, dataset.ITEMS, dataset.REMOVED, dataset.IMG = tmp, tmp / "catalog.json", tmp / "removed.json", tmp / "cutouts"
+        dataset.LOCAL_IMG = config.DATA_DIR / "cutouts"
+        url = "https://example.com/p/1"
+        row = {"url": url, "name": "Test Fleece", "brand": "Nike", "price": 50.0, "category": "top", "tags": "fleece",
+               "cutout_p": "aaaaaaaaaaaaaaaa.png", "cutout_m": None, "stock": "in_stock", "source": "t",
+               "last_checked": 100.0, "added_at": 1.0, "color": "green", "color_src": "vision"}
+        try:
+            dataset._write_items({url: row})
+            dataset.REMOVED.write_text("[]")
+            with catalog._lock:
+                catalog._db().execute("DELETE FROM products")
+                catalog._db().commit()
+            dataset.load(quiet=True)                                   # new row arrives with its color
+            r = catalog._db().execute("SELECT color, color_src FROM products WHERE url=?", (url,)).fetchone()
+            self.assertEqual((r["color"], r["color_src"]), ("green", "vision"))
+            catalog.set_color(url, ["black"], "pixel")                 # a local pixel guess ...
+            dataset.load(quiet=True)                                   # ... is replaced by the shared AI color
+            r = catalog._db().execute("SELECT color, color_src FROM products WHERE url=?", (url,)).fetchone()
+            self.assertEqual((r["color"], r["color_src"]), ("green", "vision"))
+            # export: a weaker local color never overwrites the shared AI color
+            catalog.set_color(url, ["red"], "pixel")
+            dataset.export(quiet=True)
+            self.assertEqual(dataset._read_items()[url]["color"], "green")
+            # export: a color computed locally reaches a dataset row that has none
+            dataset._write_items({url: {**row, "color": None, "color_src": None}})
+            catalog.set_color(url, ["blue"], "vision")
+            dataset.export(quiet=True)
+            self.assertEqual((dataset._read_items()[url]["color"], dataset._read_items()[url]["color_src"]), ("blue", "vision"))
+        finally:
+            dataset.DIR, dataset.ITEMS, dataset.REMOVED, dataset.IMG, dataset.LOCAL_IMG = saved
+            load_dataset()
+
+    def test_dataset_shares_colors(self):
+        import dataset
+        self.assertIn("color", dataset.FIELDS)
+        self.assertIn("color_src", dataset.FIELDS)
 
 
 if __name__ == "__main__":
