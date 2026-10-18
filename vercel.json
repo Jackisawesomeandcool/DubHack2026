@@ -1,20 +1,24 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "cd frontend && npm install",
-  "buildCommand": "bash scripts/vercel-build.sh",
-  "outputDirectory": "frontend/dist",
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 30,
-      "includeFiles": "backend/*.py,backend/dataset/catalog.json,backend/dataset/removed.json",
-      "excludeFiles": "{frontend/**,backend/data/**,backend/dataset/cutouts/**,backend/seed/**,docs/**,.git/**}"
+  "services": {
+    "backend": {
+      "root": "backend",
+      "runtime": "python",
+      "entrypoint": "vercel_app:app"
+    },
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite",
+      "rewrites": [
+        { "source": "/login", "destination": "/index.html" },
+        { "source": "/signup", "destination": "/index.html" },
+        { "source": "/h/:id", "destination": "/index.html" }
+      ]
     }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index" },
-    { "source": "/login", "destination": "/index.html" },
-    { "source": "/signup", "destination": "/index.html" },
-    { "source": "/h/:id", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/cutouts/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
   ]
 }

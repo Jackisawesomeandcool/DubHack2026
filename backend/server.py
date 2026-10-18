@@ -220,7 +220,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
         m = re.fullmatch(r"/cutouts/([a-f0-9]{16}\.png)", self.path)
         if m:
-            return self._serve_file(cutouts.CUTOUT_DIR / m.group(1), "image/png")
+            # hosted: the images ship inside the deployment (backend/dataset/cutouts), not in /tmp
+            folder = Path(config.BACKEND_DIR) / "dataset" / "cutouts" if config.HOSTED else cutouts.CUTOUT_DIR
+            return self._serve_file(folder / m.group(1), "image/png")
         self._serve_static()
 
     def _serve_file(self, path, ctype):
@@ -230,7 +232,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        # s-maxage lets Vercel's CDN keep the image, so repeat views do not run the function
+        self.send_header("Cache-Control", "public, max-age=31536000, s-maxage=31536000, immutable")
         self._cors()
         self.end_headers()
         self.wfile.write(data)

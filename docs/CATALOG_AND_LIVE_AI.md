@@ -119,7 +119,7 @@ Either way the demo is unaffected, because the catalog answers first.
 ```
 git pull
 cd backend
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 cp .env.example .env            # leave GEMINI_API_KEY and XAI_API_KEY blank
 python3 ingest_sitemap.py --per-category 25
 python3 server.py               # http://127.0.0.1:8000
@@ -172,7 +172,7 @@ If the keyless path is rate-limited, prompts that the catalog cannot answer will
 | `Incorrect API key provided` / `Bad credentials` | A Cursor-type or invalid key is in `.env`. Blank `XAI_API_KEY`. |
 | `[nike] search failed (HTTP Error 404)` | Nike's unofficial search endpoint is gone or changed. Expected; use the sitemap seeding. |
 | `AttributeError: module 'cutouts' has no attribute 'ensure_installed'` | Old `ingest.py`; pull the fixed version. |
-| `Cutouts unavailable` | Install Pillow: `pip install -r requirements.txt`. |
+| `Cutouts unavailable` | Install Pillow: `pip install -r requirements-local.txt`. |
 | `no suitable photo among N for ...` | Normal; the product had no photo without a person. It is skipped. |
 | Sitemap shows about 298 URLs | Old copy of the script with the 2 MB page cap; pull the fixed one. |
 | `ModuleNotFoundError: No module named 'stock'` | Run from `backend/`, not the repo root. |

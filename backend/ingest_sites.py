@@ -348,7 +348,7 @@ def main() -> None:
     if args.dry_run:
         return
     if not cutouts.available():
-        sys.exit("Cutouts unavailable: pip install -r requirements.txt (needs Pillow) and retry.")
+        sys.exit("Cutouts unavailable: pip install -r requirements-local.txt (needs Pillow) and retry.")
     cutouts.warm()
 
     done = tried = 0

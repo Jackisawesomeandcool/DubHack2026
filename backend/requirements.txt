@@ -1,12 +1,2 @@
-# Required
-pillow>=10
-
-# Optional: local AI background removal for on-model photos / busy backgrounds
-# (installed automatically on first need unless PHOTOROOM_API_KEY / REMOVEBG_API_KEY is set)
-# rembg>=2.0.60
-# onnxruntime>=1.17
-
-# Local photo-quality check (person detector for cutouts; optional but recommended)
-onnxruntime>=1.17
-scipy>=1.10
-numpy>=1.24
+# Intentionally empty: the hosted API (Vercel) uses only the Python standard library.
+# For local scraping / cropping / cutout tools install:  pip install -r requirements-local.txt

@@ -39,7 +39,7 @@ Needs Python 3.10+ and Node 18+. Two terminals.
 ```bash
 # 1. backend (port 8000)
 cd backend
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 cp .env.example .env            # optional: add GEMINI_API_KEY
 python3 server.py
 
@@ -145,7 +145,7 @@ Product shape: `name`, `brand`, `price`, `image`, `stock` (`in_stock` / `out_of_
 ## Hosting (Vercel, free)
 
 The site deploys to Vercel's free Hobby plan with a free Upstash Redis for accounts and share links: static React build,
-product images as static files, and one Python function (`api/index.py`) reusing `backend/server.py`. Steps and limits are in
+and a Python `backend` service (`backend/vercel_app.py`, an adapter around `backend/server.py`) that serves `/api` and the product images. Steps and limits are in
 [docs/DEPLOY.md](docs/DEPLOY.md). Locally nothing changes.
 
 ## Repo layout
@@ -155,7 +155,7 @@ backend/   server.py (HTTP) · catalog.py · intent.py · ranker.py · finder.py
            auth.py · auth_kv.py · kv.py (hosted accounts on Upstash) · store.py (shares) · llm.py / gemini.py / grok.py · cutouts.py · bgremove.py · images.py
            quality.py · garment.py · people.py (photo checks) · seed.py + seed/ · dataset.py + dataset/
            ingest_sites.py · ingest_sitemap.py · audit_catalog.py · view_catalog.py · test_search.py
-api/        index.py — Vercel serverless entry (see docs/DEPLOY.md) · vercel.json · scripts/vercel-build.sh
+vercel.json  two Vercel services (frontend + backend) — see docs/DEPLOY.md · backend/vercel_app.py = ASGI entry
 frontend/  src/App.jsx · components/ (board, tray, prompt bar, share, account, theme) · lib/ (api, haul, theme, ...) · styles.css
 docs/      DATASET.md · CATALOG_AND_LIVE_AI.md (history of the earlier live-search design)
 ```

@@ -7,7 +7,7 @@ products to their local database (no scraping, takes a second).
 ## Everyone, once per clone
 ```
 git config core.hooksPath .githooks     # every commit then refreshes backend/dataset automatically
-pip install -r backend/requirements.txt
+pip install -r backend/requirements-local.txt
 ```
 
 ## Publishing your data
