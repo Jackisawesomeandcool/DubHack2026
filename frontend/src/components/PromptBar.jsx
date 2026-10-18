@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 // Floating finder at the bottom. Submit -> options appear above it.
-export default function PromptBar({ onSubmit, onTyping, busy }) {
+export default function PromptBar({ onSubmit, busy }) {
   const [value, setValue] = useState('');
   // While the user types, the box holds still (CSS drops its twinkle); it resumes once they pause.
   const [typing, setTyping] = useState(false);
@@ -13,7 +13,6 @@ export default function PromptBar({ onSubmit, onTyping, busy }) {
   }
   function onType(e) {
     setValue(e.target.value);
-    if (e.target.value) onTyping?.();
     setTyping(true);
     clearTimeout(idle.current);
     idle.current = setTimeout(() => setTyping(false), 1200);

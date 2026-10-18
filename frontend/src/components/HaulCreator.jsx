@@ -93,11 +93,7 @@ export default function HaulCreator() {
   // Click the error message to try loading again.
   const retry = () => !loadingFit && fit.items.length === 0 && loadRandom(current);
 
-  // Any typing in the finder flips the tray back to suggestions.
-  function onTyping() {
-    if (favMode) toggleFavMode();
-  }
-
+  // Running a search (the arrow button / Enter) brings the tray back to suggestions.
   async function find(prompt) {
     if (favMode) toggleFavMode();
     const id = nextId.current++;
@@ -294,7 +290,7 @@ export default function HaulCreator() {
             onToggleFavMode={toggleFavMode}
           />
         )}
-        <PromptBar onSubmit={find} onTyping={onTyping} busy={Boolean(active?.loading)} />
+        <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
       </footer>
     </main>
   );
