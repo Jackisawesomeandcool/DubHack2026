@@ -38,7 +38,9 @@ def main() -> None:
     ap.add_argument("--gap", type=float, default=2.0, help="seconds between searches")
     args = ap.parse_args()
 
-    cutouts.ensure_installed()
+    if not cutouts.available():
+        sys.exit("Cutouts unavailable: install Pillow (pip install -r requirements.txt) and retry.")
+    cutouts.warm()
     modes = [False, True] if args.models else [False]
     searches = list(catalog.POPULAR)
     for cat in CATEGORIES:
