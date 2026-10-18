@@ -114,7 +114,7 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow: clip; /* clip, not hidden: focus/scrollIntoView can't shift the page */
 }
-html { overflow: clip; }
+html { overflow: clip; touch-action: pan-x pan-y; /* no pinch-zoom */ }
 
 button {
   font: inherit;
