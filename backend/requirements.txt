@@ -5,3 +5,7 @@ pillow>=10
 # (installed automatically on first need unless PHOTOROOM_API_KEY / REMOVEBG_API_KEY is set)
 # rembg>=2.0.60
 # onnxruntime>=1.17
+
+# Local photo-quality check (person detector for cutouts; optional but recommended)
+onnxruntime>=1.17
+numpy>=1.24

@@ -49,7 +49,7 @@ export default function ShareControl({ fits, current, disabled }) {
     setOpen((o) => !o);
   }
 
-  const label = { idle: 'SHARE', busy: '…', copied: 'LINK COPIED', link: 'LINK READY', error: 'TRY AGAIN' }[state];
+  const label = { idle: 'Share', busy: '…', copied: 'Link copied', link: 'Link ready', error: 'Try again' }[state];
 
   return (
     <div className="share" ref={ref}>
@@ -66,10 +66,10 @@ export default function ShareControl({ fits, current, disabled }) {
       {open && (
         <div className="share__menu" role="menu">
           <button type="button" role="menuitem" className="share__opt" disabled={!currentHasItems} onClick={() => share([fits[current]])}>
-            <span>this haul</span><small>{fitLabel(current)}</small>
+            <span>This fit</span><small>{fitLabel(current)}</small>
           </button>
           <button type="button" role="menuitem" className="share__opt" onClick={() => share(fits)}>
-            <span>all hauls</span><small>{filled.length} hauls</small>
+            <span>All fits</span><small>{filled.length} fits</small>
           </button>
         </div>
       )}

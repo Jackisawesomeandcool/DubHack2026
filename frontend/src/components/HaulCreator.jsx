@@ -111,7 +111,7 @@ export default function HaulCreator() {
     try {
       const prompt = `${item.category === 'bottom' ? 'pants' : item.category} similar in style to ${item.name}`;
       const apply = (list) => {
-        const alts = list.filter((a) => !sameProduct(a, item));
+        const alts = list.filter((a) => !sameProduct(a, item) && !fit.items.some((b) => b.uid !== item.uid && sameProduct(b, a)));
         setSwap((s) => (s && s.uid === item.uid ? { ...s, alts, loading: false } : s));
       };
       apply(await suggest(prompt, item.category, fit.items.map((i) => i.name), apply, modelsRef.current));

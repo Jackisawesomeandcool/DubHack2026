@@ -20,7 +20,7 @@ export default function HaulTotal({ total, pendingTotal = null }) {
     <div className={`total${previewing ? ' is-previewing' : ''}`} aria-live="polite">
       {previewing && <span className="total__next">{formatPrice(pendingTotal)}</span>}
       <span className={`total__value${anim.dir ? ` is-${anim.dir}` : ''}`} key={anim.n}>{formatPrice(total)}</span>
-      <span className="total__label">TOTAL</span>
+      <span className="total__label">total</span>
     </div>
   );
 }
