@@ -1,0 +1,163 @@
+"""Accounts, in their own database: backend/data/users.sqlite.
+
+Kept apart from catalog.sqlite on purpose — the catalog is rebuilt and exported
+by the scraping tools, and user data must never ride along with that.
+
+    users     id, username (unique, lowercase), email (unique, lowercase),
+              first_name, password_hash, salt, created_at
+    sessions  token, user_id, created_at, last_seen
+
+Passwords are hashed with scrypt (standard library, no extra packages); a
+session token is a random 32-byte string the browser sends back as
+`Authorization: Bearer <token>`.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import re
+import secrets
+import sqlite3
+import threading
+import time
+
+import config
+
+DB_PATH = config.DATA_DIR / "users.sqlite"
+USERNAME_RE = re.compile(r"^[a-z0-9_.]{3,20}$")
+EMAIL_RE = re.compile(r"^\S+@\S+\.\S+$")
+MIN_PASSWORD = 8
+SESSION_TTL = 30 * 24 * 3600  # 30 days
+
+_lock = threading.Lock()
+_conn: sqlite3.Connection | None = None
+
+
+class AuthError(Exception):
+    """A user-facing problem (bad input, wrong password, taken username)."""
+
+
+def _db() -> sqlite3.Connection:
+    global _conn
+    if _conn is None:
+        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        _conn.row_factory = sqlite3.Row
+        _conn.executescript("""
+            PRAGMA journal_mode=WAL;
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                first_name TEXT NOT NULL,
+                password_hash BLOB NOT NULL,
+                salt BLOB NOT NULL,
+                created_at REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at REAL NOT NULL,
+                last_seen REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+        """)
+    return _conn
+
+
+# ---------------------------------------------------------------- passwords
+def _hash(password: str, salt: bytes) -> bytes:
+    return hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
+
+
+def _public(row: sqlite3.Row) -> dict:
+    return {"id": row["id"], "username": row["username"], "email": row["email"], "firstName": row["first_name"]}
+
+
+# ---------------------------------------------------------------- accounts
+def signup(first_name: str, username: str, email: str, password: str) -> tuple[dict, str]:
+    """Create an account; returns (user, session token)."""
+    first_name = (first_name or "").strip()[:40]
+    username = (username or "").strip().lstrip("@").lower()
+    email = (email or "").strip().lower()
+    if not first_name:
+        raise AuthError("Enter your first name.")
+    if not USERNAME_RE.fullmatch(username):
+        raise AuthError("Usernames are 3–20 characters: letters, numbers, _ or .")
+    if not EMAIL_RE.fullmatch(email) or len(email) > 120:
+        raise AuthError("Enter a valid email.")
+    if len(password or "") < MIN_PASSWORD:
+        raise AuthError(f"Password needs at least {MIN_PASSWORD} characters.")
+    salt = secrets.token_bytes(16)
+    now = time.time()
+    with _lock:
+        db = _db()
+        if db.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
+            raise AuthError("That username is taken.")
+        if db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+            raise AuthError("An account with that email already exists — log in instead.")
+        cur = db.execute(
+            "INSERT INTO users (username, email, first_name, password_hash, salt, created_at) VALUES (?,?,?,?,?,?)",
+            (username, email, first_name, _hash(password, salt), salt, now))
+        user_id = cur.lastrowid
+        token = _new_session(db, user_id, now)
+        db.commit()
+        row = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    return _public(row), token
+
+
+def login(identifier: str, password: str) -> tuple[dict, str]:
+    """Email or username + password; returns (user, session token)."""
+    ident = (identifier or "").strip().lstrip("@").lower()
+    if not ident or not password:
+        raise AuthError("Enter your email or username and password.")
+    with _lock:
+        db = _db()
+        row = db.execute("SELECT * FROM users WHERE email=? OR username=?", (ident, ident)).fetchone()
+        # Same work and same message whether the account exists or not.
+        salt = row["salt"] if row else b"\0" * 16
+        ok = row is not None and hmac.compare_digest(_hash(password, salt), row["password_hash"])
+        if not ok:
+            raise AuthError("Wrong email/username or password.")
+        token = _new_session(db, row["id"], time.time())
+        db.commit()
+    return _public(row), token
+
+
+def _new_session(db: sqlite3.Connection, user_id: int, now: float) -> str:
+    token = secrets.token_urlsafe(32)
+    db.execute("INSERT INTO sessions (token, user_id, created_at, last_seen) VALUES (?,?,?,?)", (token, user_id, now, now))
+    return token
+
+
+def user_for(token: str | None) -> dict | None:
+    """The signed-in user for a session token, or None."""
+    if not token:
+        return None
+    now = time.time()
+    with _lock:
+        db = _db()
+        row = db.execute(
+            "SELECT u.*, s.last_seen FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token=?", (token,)).fetchone()
+        if not row or now - row["last_seen"] > SESSION_TTL:
+            if row:
+                db.execute("DELETE FROM sessions WHERE token=?", (token,))
+                db.commit()
+            return None
+        db.execute("UPDATE sessions SET last_seen=? WHERE token=?", (now, token))
+        db.commit()
+    return _public(row)
+
+
+def logout(token: str | None) -> None:
+    if not token:
+        return
+    with _lock:
+        _db().execute("DELETE FROM sessions WHERE token=?", (token,))
+        _db().commit()
+
+
+def count() -> int:
+    with _lock:
+        return _db().execute("SELECT COUNT(*) FROM users").fetchone()[0]

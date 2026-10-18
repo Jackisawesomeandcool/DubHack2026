@@ -1,9 +1,9 @@
-// Demo-only accounts. Nothing here talks to the backend: the "user" is just
-// a name + email kept in this browser so the app can greet people and route
-// them through log in / sign up. Real auth would replace this file.
+// Accounts live on the backend (backend/data/users.sqlite, see backend/auth.py).
+// The browser keeps only a session token and a cached copy of the signed-in
+// user so pages can render the name before the backend answers.
 
 const USER = 'haul:user';
-const ACCOUNTS = 'haul:accounts'; // everyone who signed up in this browser
+const TOKEN = 'haul:token';
 const GUEST = 'haul:guest';
 
 function read(key, fallback) {
@@ -18,11 +18,7 @@ function write(key, value) {
   try {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, JSON.stringify(value));
-  } catch { /* private mode: the demo still works for this page view */ }
-}
-
-export function loadUser() {
-  return read(USER, null);
+  } catch { /* private mode: the session lasts for this page view */ }
 }
 
 export const USERNAME_RE = /^[a-z0-9_.]{3,20}$/;
@@ -32,34 +28,60 @@ export function cleanUsername(value) {
   return value.trim().replace(/^@/, '').toLowerCase();
 }
 
-// "Log in": any email or username works. If it matches an account that signed
-// up in this browser we use its details; otherwise we make one up (demo only).
-export function logIn(identifier) {
-  const id = identifier.trim();
-  const isEmail = id.includes('@') && !id.startsWith('@');
-  const handle = isEmail ? '' : cleanUsername(id);
-  const known = read(ACCOUNTS, []).find((a) =>
-    isEmail ? a.email.toLowerCase() === id.toLowerCase() : a.username === handle);
-  if (known) {
-    write(USER, known);
-  } else {
-    const username = handle || id.split('@')[0].toLowerCase();
-    write(USER, { firstName: username, username, email: isEmail ? id : '' });
-  }
-  write(GUEST, null);
+export function token() {
+  return read(TOKEN, null);
 }
 
-export function signUp({ firstName, username, email }) {
-  const user = { firstName: firstName.trim(), username: cleanUsername(username), email: email.trim() };
-  const others = read(ACCOUNTS, []).filter((a) => a.username !== user.username && a.email !== user.email);
-  write(ACCOUNTS, [...others, user]);
+export function loadUser() {
+  return read(USER, null);
+}
+
+async function call(path, body) {
+  const res = await fetch(`/api/auth/${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json', ...(token() ? { Authorization: `Bearer ${token()}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+function startSession({ user, token: t }) {
   write(USER, user);
+  write(TOKEN, t);
+  write(GUEST, null);
+  return user;
+}
+
+// Email or username + password. Throws with a readable message on failure.
+export async function logIn(identifier, password) {
+  return startSession(await call('login', { identifier: identifier.trim(), password }));
+}
+
+export async function signUp({ firstName, username, email, password }) {
+  return startSession(await call('signup', { firstName: firstName.trim(), username: cleanUsername(username), email: email.trim(), password }));
+}
+
+export async function logOut() {
+  try { if (token()) await call('logout', {}); } catch { /* the token is dropped either way */ }
+  write(USER, null);
+  write(TOKEN, null);
   write(GUEST, null);
 }
 
-export function logOut() {
-  write(USER, null);
-  write(GUEST, null);
+// Ask the backend who this token belongs to; drops the session if it's stale.
+export async function refreshUser() {
+  if (!token()) return null;
+  try {
+    const { user } = await call('me');
+    write(USER, user);
+    return user;
+  } catch {
+    write(USER, null);
+    write(TOKEN, null);
+    return null;
+  }
 }
 
 export function continueAsGuest() {
@@ -72,7 +94,7 @@ export function isGuest() {
 
 // Signed in or chose guest: either way they may use the builder.
 export function hasSession() {
-  return Boolean(loadUser()) || isGuest();
+  return (Boolean(loadUser()) && Boolean(token())) || isGuest();
 }
 
 export function go(path) {

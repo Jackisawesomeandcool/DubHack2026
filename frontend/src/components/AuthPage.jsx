@@ -22,7 +22,7 @@ const COPY = {
 };
 
 // Log in and sign up share one screen: a live outfit board on the left, the
-// form on the right. Accounts are demo-only (see lib/session.js).
+// form on the right. Accounts are stored by the backend (see lib/session.js).
 export default function AuthPage({ mode = 'login' }) {
   const copy = COPY[mode];
   const isSignup = mode === 'signup';
@@ -34,6 +34,7 @@ export default function AuthPage({ mode = 'login' }) {
   const [email, setEmail] = useState(isSignup ? '' : known?.email || known?.username || '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState([]);
   const [previewLoading, setPreviewLoading] = useState(true);
 
@@ -47,21 +48,27 @@ export default function AuthPage({ mode = 'login' }) {
     return () => { alive = false; };
   }, []);
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
+    if (busy) return;
     const id = email.trim();
     if (isSignup) {
       if (!firstName.trim()) return setError('Enter your first name.');
       if (!USERNAME_RE.test(cleanUsername(username))) return setError('Usernames are 3–20 characters: letters, numbers, _ or .');
       if (!/^\S+@\S+\.\S+$/.test(id)) return setError('Enter a valid email.');
       if (password.length < 8) return setError('Password needs at least 8 characters.');
-      signUp({ firstName, username, email: id });
-      go('/');
     } else {
       if (!id) return setError('Enter your email or username.');
       if (!password) return setError('Enter your password.');
-      logIn(id);
+    }
+    setBusy(true);
+    try {
+      if (isSignup) await signUp({ firstName, username, email: id, password });
+      else await logIn(id, password);
       go('/');
+    } catch (err) {
+      setError(err.message === 'Failed to fetch' ? 'Can\u2019t reach the server \u2014 is the backend running?' : err.message);
+      setBusy(false);
     }
   }
 
@@ -138,7 +145,7 @@ export default function AuthPage({ mode = 'login' }) {
 
           {error && <p className="auth__error" role="alert">{error}</p>}
 
-          <button type="submit" className="auth__submit">{copy.submit}</button>
+          <button type="submit" className="auth__submit" disabled={busy}>{busy ? '\u2026' : copy.submit}</button>
 
           {isSignup ? (
             <p className="auth__switch">Already have an account? <a href="/login">Log in</a></p>
