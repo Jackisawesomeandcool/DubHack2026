@@ -35,11 +35,13 @@ def _trim(it: Intent, pool: list[dict], models: bool, exclude: list[str]) -> lis
     return hits + [p for p in pool if p["url"] not in seen][: MAX_CANDIDATES - len(hits)]
 
 
-def rank(prompt: str, it: Intent, pool: list[dict], count: int, models: bool, exclude: list[str]) -> tuple[list[dict], str]:
-    """(picked items best first, source) where source is the provider name or 'keywords'."""
+def rank(prompt: str, it: Intent, pool: list[dict], count: int, models: bool, exclude: list[str],
+         ai: bool = True) -> tuple[list[dict], str]:
+    """(picked items best first, source) where source is the provider name or 'keywords'.
+    ai=False is the shopper's "AI-powered fits" switch turned off: instant keyword ranking, no model call."""
     if not pool:
         return [], "none"
-    if not llm.configured():
+    if not ai or not llm.configured():
         return catalog.search(it, models, exclude, limit=count), "keywords"
 
     pool = _trim(it, pool, models, exclude)

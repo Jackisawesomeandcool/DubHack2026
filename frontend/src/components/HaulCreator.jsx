@@ -7,6 +7,7 @@ import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
+import { setAiAvailable } from '../lib/aiMode.js';
 import BrowseColumn from './BrowseColumn.jsx';
 import Backdrop from './Backdrop.jsx';
 import AccountMenu from './AccountMenu.jsx';
@@ -130,6 +131,7 @@ export default function HaulCreator() {
     const check = async () => {
       try {
         const h = await health();
+        setAiAvailable(Boolean(h.ai));
         if (!h.cutouts) { setSetup('preparing cutouts…'); timer = setTimeout(check, 4000); }
         else setSetup(null);
       } catch { setSetup('backend not running — start python server.py'); timer = setTimeout(check, 4000); }

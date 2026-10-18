@@ -74,11 +74,11 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return data if isinstance(data, dict) else None
 
-    def _stream_suggest(self, prompt, category, exclude, models=False):
+    def _stream_suggest(self, prompt, category, exclude, models=False, ai=True):
         """NDJSON stream: {"items": [...]} then {"done": true}; an empty items list
         comes with a {"reason": "..."} event saying why (e.g. nothing under the budget)."""
         try:
-            gen = finder.stream(prompt, category, exclude, models)
+            gen = finder.stream(prompt, category, exclude, models, ai=ai)
             first = next(gen)
         except (llm.LLMError, StopIteration) as err:
             print(f"[ai] {err}", file=sys.stderr)
@@ -122,7 +122,8 @@ class Handler(BaseHTTPRequestHandler):
             models = bool(body.get("models", False))
             if not _require_key(self):
                 return None
-            return self._stream_suggest(prompt, category, exclude, models)
+            ai = body.get("ai", True) is not False      # the "AI-powered fits" switch in the search bar
+            return self._stream_suggest(prompt, category, exclude, models, ai)
 
         if self.path.startswith("/api/auth/"):
             return self._auth_post()

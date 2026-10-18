@@ -26,6 +26,7 @@ import time
 
 import catalog
 import intent as intent_mod
+import llm
 import ranker
 
 COUNT = 30   # the tray scrolls, so show everything that fits the request (up to this)
@@ -69,29 +70,30 @@ def _dedupe(items: list[dict]) -> list[dict]:
 
 
 def results(prompt: str, category: str | None = None, exclude: list[str] | None = None,
-            models: bool = False, count: int = COUNT) -> list[dict]:
+            models: bool = False, count: int = COUNT, ai: bool = True) -> list[dict]:
     """Finished products for a request (all from the catalog). Raises NoMatch.
     When nothing matches, a misspelling ("cartigans") is corrected against the catalog's words and tried once more."""
     try:
-        return _results(prompt, category, exclude, models, count)
+        return _results(prompt, category, exclude, models, count, ai)
     except NoMatch:
         fixed = catalog.correct(prompt)
         if fixed:
             print(f"[finder] nothing for {prompt!r}; trying {fixed!r}", file=sys.stderr)
             try:
-                return _results(fixed, category, exclude, models, count)
+                return _results(fixed, category, exclude, models, count, ai)
             except NoMatch:
                 pass
         raise
 
 
 def _results(prompt: str, category: str | None = None, exclude: list[str] | None = None,
-             models: bool = False, count: int = COUNT) -> list[dict]:
+             models: bool = False, count: int = COUNT, ai: bool = True) -> list[dict]:
     exclude = exclude or []
+    ai = ai and llm.configured()          # the "AI-powered fits" switch only matters when a provider is set up
     t0 = time.time()
     it = intent_mod.parse(prompt, category)
 
-    cached = catalog.cached_results(it, models, exclude)
+    cached = catalog.cached_results(it, models, exclude, ai)
     if cached:
         print(f"[finder] {it.describe()} · cache hit {1000 * (time.time() - t0):.0f}ms · {len(cached)} items", file=sys.stderr)
         return cached[:count]
@@ -103,22 +105,22 @@ def _results(prompt: str, category: str | None = None, exclude: list[str] | None
         print(f"[finder] {it.describe()} · 0 candidates · {reason}", file=sys.stderr)
         raise NoMatch(reason, near)
 
-    picked, source = ranker.rank(prompt, it, pool, count, models, exclude)
+    picked, source = ranker.rank(prompt, it, pool, count, models, exclude, ai)
     picked = _dedupe(picked)
     print(f"[finder] {it.describe()} · {len(pool)} candidates → {len(picked)} via {source} · {1000 * (time.time() - t0):.0f}ms",
           file=sys.stderr)
     if not picked:
         raise NoMatch(f"Nothing in the catalog matches \"{prompt.strip()}\"")
-    catalog.cache_results(it, models, picked)
+    catalog.cache_results(it, models, picked, ai)
     return picked
 
 
 def stream(prompt: str, category: str | None = None, exclude: list[str] | None = None,
-           models: bool = False, count: int = COUNT, local_first: bool = True):
+           models: bool = False, count: int = COUNT, local_first: bool = True, ai: bool = True):
     """NDJSON event generator for /api/suggest. `local_first` is accepted for
     compatibility and ignored: everything is local now."""
     try:
-        items = results(prompt, category, exclude, models, count)
+        items = results(prompt, category, exclude, models, count, ai)
     except NoMatch as err:
         yield {"items": []}
         yield {"reason": str(err), "closest": err.closest}

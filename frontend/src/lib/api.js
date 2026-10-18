@@ -1,4 +1,5 @@
 // All AI and sharing requests go through the Python backend. No secrets here.
+import { aiEnabled } from './aiMode.js';
 
 async function request(path, options) {
   const res = await fetch(path, {
@@ -19,7 +20,7 @@ export async function suggest(prompt, category, exclude, onUpdate, models = fals
   const res = await fetch('/api/suggest', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, category: category || null, exclude: exclude || [], models }),
+    body: JSON.stringify({ prompt, category: category || null, exclude: exclude || [], models, ai: aiEnabled() }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

@@ -254,6 +254,18 @@ class Finder(unittest.TestCase):
             finder.results("shoes below $100")
         self.assertEqual(len(stub.calls), 1)
 
+    def test_ai_switch_off_skips_the_model_and_has_its_own_cache(self):
+        with StubLLM(want="fleece") as stub:
+            fast = finder.results("cozy fall fit", count=4, ai=False)
+            self.assertEqual(stub.calls, [], "switch off: no model call")
+            smart = finder.results("cozy fall fit", count=4, ai=True)
+            self.assertEqual(len(stub.calls), 1, "switch on after off: not served from the keyword cache")
+            self.assertTrue(all("fleece" in i["name"].lower() for i in smart))
+            finder.results("cozy fall fit", count=4, ai=True)
+            finder.results("cozy fall fit", count=4, ai=False)
+            self.assertEqual(len(stub.calls), 1, "both answers are cached")
+        self.assertTrue(fast)
+
     def test_stream_shape(self):
         evs = list(finder.stream("shoes under 100 dollars"))
         self.assertEqual([list(e)[0] for e in evs], ["items", "done"])

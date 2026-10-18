@@ -132,7 +132,7 @@ Keys are read only by the Python backend and never reach the browser.
 | Method | Path | Notes |
 |--------|------|-------|
 | GET | `/api/random-fit` | a pre-built random outfit; `?models=1` for on-model photos |
-| POST | `/api/suggest` | `{prompt, category?, exclude?, models?}`; NDJSON stream: `{items}`, then `{reason, closest}` when nothing matched, then `{done}` |
+| POST | `/api/suggest` | `{prompt, category?, exclude?, models?, ai?}` (`ai: false` = instant keyword ranking, the "AI-powered fits" switch); NDJSON stream: `{items}`, then `{reason, closest}` when nothing matched, then `{done}` |
 | POST | `/api/share` · GET `/api/share/<id>` | create / read a shared link (`{fits}`) |
 | POST | `/api/seen` | note products in play so their stock is re-checked |
 | POST | `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout` · GET `/api/auth/me` | accounts |

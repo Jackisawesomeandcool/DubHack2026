@@ -145,8 +145,8 @@ def set_stock(url: str, stock: str) -> None:
         _db().commit()
 
 
-def cache_results(intent_: Intent, models: bool, items: list[dict]) -> None:
-    key = _result_key(intent_, models)
+def cache_results(intent_: Intent, models: bool, items: list[dict], ai: bool = False) -> None:
+    key = _result_key(intent_, models, ai)
     with _lock:
         _db().execute("INSERT OR REPLACE INTO results (key, urls, created) VALUES (?,?,?)",
                       (key, json.dumps([_url_key(i) for i in items if i.get("image")]), time.time()))
@@ -157,9 +157,10 @@ def cache_results(intent_: Intent, models: bool, items: list[dict]) -> None:
 KEY_VERSION = "v3"   # bump when the key format changes; old rows simply never match again
 
 
-def _result_key(intent_: Intent, models: bool) -> str:
-    """Keyed by the *parsed* intent, so 'shoes under $50' and 'shoes below 50 dollars' share a cache."""
-    return f"{KEY_VERSION}|{intent_.key()}|{'m' if models else 'p'}"
+def _result_key(intent_: Intent, models: bool, ai: bool = False) -> str:
+    """Keyed by the *parsed* intent, so 'shoes under $50' and 'shoes below 50 dollars' share a cache.
+    AI-ranked and keyword-ranked answers are cached apart, so flipping the switch gives the other kind."""
+    return f"{KEY_VERSION}|{intent_.key()}|{'m' if models else 'p'}{'|ai' if ai else ''}"
 
 
 def _filter_item(r: sqlite3.Row, models: bool) -> dict:
@@ -167,10 +168,10 @@ def _filter_item(r: sqlite3.Row, models: bool) -> dict:
     return {**_row_to_item(r, models), "tags": r["tags"] or ""}
 
 
-def cached_results(intent_: Intent, models: bool, exclude: list[str]) -> list[dict] | None:
+def cached_results(intent_: Intent, models: bool, exclude: list[str], ai: bool = False) -> list[dict] | None:
     """Products from an earlier identical search, if still fresh, in stock and still within the filters."""
     with _lock:
-        row = _db().execute("SELECT urls, created FROM results WHERE key=?", (_result_key(intent_, models),)).fetchone()
+        row = _db().execute("SELECT urls, created FROM results WHERE key=?", (_result_key(intent_, models, ai),)).fetchone()
         if not row or time.time() - row["created"] > RESULT_TTL:
             return None
         ex = {n.lower() for n in exclude}
