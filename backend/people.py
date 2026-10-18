@@ -13,6 +13,15 @@ def has_person(raw: bytes) -> bool | None:
         from PIL import Image
     except Exception:  # noqa: BLE001
         return None
+    # Local YOLOX person detector when available (quality.py); skin tone otherwise.
+    try:
+        import quality
+        if quality.available():
+            verdict = quality.shows_person(Image.open(io.BytesIO(raw)))
+            if verdict is not None:
+                return verdict
+    except Exception:  # noqa: BLE001
+        pass
     try:
         im = Image.open(io.BytesIO(raw)).convert("RGB")
         im.thumbnail((256, 256))

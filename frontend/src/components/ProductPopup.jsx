@@ -10,7 +10,7 @@ function host(url) {
 // Small floating card: name, brand, stock, link to the listing (+ remove when
 // editing). Positioned next to the clicked item and clamped inside the viewport.
 // Clicks in the dock (options / finder) keep it open so a swap can be picked.
-export default function ProductPopup({ item, anchor, onClose, onRemove }) {
+export default function ProductPopup({ item, anchor, onClose, onRemove, favorite = null, onFavorite }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
 
@@ -74,6 +74,20 @@ export default function ProductPopup({ item, anchor, onClose, onRemove }) {
         <a className="popup__link" href={item.url} target="_blank" rel="noopener noreferrer">
           view on {host(item.url)} ↗
         </a>
+      )}
+      {onFavorite && (
+        <button
+          type="button"
+          className={`popup__star${favorite ? ' is-on' : ''}`}
+          onClick={onFavorite}
+          aria-pressed={Boolean(favorite)}
+          aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'}
+          title={favorite ? 'Favorited' : 'Favorite'}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path d="M12 2.8l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.7l-5.9 3.1 1.2-6.5L2.5 9.7l6.6-.9z" fill={favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+          </svg>
+        </button>
       )}
     </div>
   );

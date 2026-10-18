@@ -172,9 +172,15 @@ def search(prompt: str, category: str | None, models: bool, exclude: list[str], 
             f"SELECT * FROM products WHERE stock='in_stock' AND {col} IS NOT NULL" + (" AND category=?" if cat_hint else ""),
             (cat_hint,) if cat_hint else ()).fetchall()
     scored = [(_score(r, words, cat_hint), r) for r in rows if r["name"].lower() not in ex]
-    scored = [(s, r) for s, r in scored if s > 0]
-    scored.sort(key=lambda t: (-t[0], -(t[1]["last_checked"] or 0)))
-    return [_row_to_item(r, models) for _, r in scored[:limit]]
+    ranked = [(s, r) for s, r in scored if s > 0]
+    ranked.sort(key=lambda t: (-t[0], -(t[1]["last_checked"] or 0)))
+    if not ranked and cat_hint:
+        # Nothing matched by keyword, but the category was explicit (a swap):
+        # offer other pieces of that kind rather than nothing.
+        pool = [r for _, r in scored]
+        random.shuffle(pool)
+        ranked = [(0.0, r) for r in pool]
+    return [_row_to_item(r, models) for _, r in ranked[:limit]]
 
 
 def random_fit(models: bool) -> dict | None:

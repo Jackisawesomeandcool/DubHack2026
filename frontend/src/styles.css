@@ -46,8 +46,9 @@ body {
   font-family: var(--font);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
-  overflow: hidden;
+  overflow: clip; /* clip, not hidden: focus/scrollIntoView can't shift the page */
 }
+html { overflow: clip; }
 
 button {
   font: inherit;
@@ -316,7 +317,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   pointer-events: none;
 }
 .item__art img {
-  max-height: calc(var(--u) * 44);
+  max-height: calc(var(--u) * 34);
   object-fit: contain;
   mix-blend-mode: multiply; /* white studio backgrounds dissolve into the board */
   animation: fade var(--mid) var(--ease);
@@ -735,3 +736,181 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 @media (max-width: 520px) {
   .canvas { --u: 8px; }
 }
+
+/* ---- restored: swap arrows / keep-undo, drag-out total preview, haul delete, models toggle, pending chips ---- */
+.fits__item { position: relative; display: flex; align-items: stretch; }
+.fits__item .fits__tab { flex: 1; }
+.fits__del {
+  position: absolute;
+  top: -7px; right: -7px;
+  width: 22px; height: 22px; line-height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--line);
+  animation: popIn 160ms var(--ease);
+  transition: background var(--fast), color var(--fast), transform var(--fast) var(--ease);
+}
+.fits__del:hover { background: var(--out); color: #fff; transform: scale(1.1); }
+.total.is-previewing .total__value {
+  text-decoration: line-through;
+  color: var(--ink-3);
+  font-weight: 700;
+}
+.total__next {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--out);
+  animation: pop var(--mid) var(--ease);
+}
+.canvas__hint.is-clickable { pointer-events: auto; cursor: pointer; }
+.canvas__hint.is-clickable:hover { color: var(--ink); }
+.item__hit {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  border-radius: 18px;
+  -webkit-tap-highlight-color: transparent;
+}
+.item.is-draggable .item__hit { cursor: grab; touch-action: none; }
+.item.is-dragging .item__hit { cursor: grabbing; }
+.item__arrow {
+  position: absolute;
+  top: 50%;
+  width: 34px; height: 34px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+  display: grid; place-items: center;
+  box-shadow: var(--shadow-md);
+  animation: popIn 180ms var(--ease);
+  transition: transform var(--fast) var(--ease), background var(--fast), color var(--fast), opacity var(--fast);
+}
+.item__arrow:hover:not(:disabled) { background: var(--ink); color: var(--accent-ink); transform: translateY(-50%) scale(1.08); }
+.item__arrow:active:not(:disabled) { transform: translateY(-50%) scale(0.94); }
+.item__arrow:disabled { opacity: 0.35; cursor: default; }
+.item__actions {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+  animation: rise var(--mid) var(--ease);
+}
+.item__hintpill, .item__keep, .item__undo {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  display: inline-flex; align-items: center;
+  box-shadow: var(--shadow-sm);
+}
+.item__hintpill { background: var(--surface); color: var(--ink-3); }
+.item__keep { background: var(--ok); color: #fff; transition: transform var(--fast) var(--ease); }
+.item__undo { background: var(--surface); color: var(--ink-2); transition: transform var(--fast) var(--ease), color var(--fast); }
+.item__keep:hover, .item__undo:hover { transform: translateY(-1px); }
+.item__undo:hover { color: var(--out); }
+.item.is-dirty .item__art { animation: nudge 320ms var(--ease); }
+.tray__title { margin: 0 8px 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.chip.is-preview { background: #fff; box-shadow: 0 0 0 2px var(--ink), var(--shadow-md); }
+.chip__badge.is-preview { background: var(--ink); color: var(--accent-ink); font-size: 9px; pointer-events: none; }
+.chip--pending {
+  display: grid; place-items: end start;
+  padding: 10px;
+  background: linear-gradient(90deg, #f1eee8 25%, #f8f6f2 50%, #f1eee8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+.chip__pendingname {
+  font-size: 10px; font-weight: 700; line-height: 1.25;
+  color: var(--ink-3);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* ------------------------------------------------------------------ notice */
+.notice {
+  padding: 6px 12px;
+  border-radius: var(--r-pill);
+  background: #fff6e5;
+  color: #8a5a00;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  animation: rise var(--mid) var(--ease);
+}
+/* ------------------------------------------------------------------ models toggle */
+.dock__row { display: flex; align-items: center; gap: 10px; width: min(760px, 100%); justify-content: center; }
+.dock__row .prompt { width: min(620px, 100%); }
+.toggle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 8px 0 14px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.toggle:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.toggle:active { transform: scale(0.97); }
+.toggle.is-on .toggle__label { color: var(--ink); }
+.toggle.is-on .toggle__track { background: var(--ink); }
+.toggle.is-on .toggle__knob { transform: translateX(14px); }
+@keyframes nudge { 0% { transform: scale(0.96); } 60% { transform: scale(1.03); } 100% { transform: none; } }
+.item__art img { transition: opacity var(--mid) var(--ease); animation: fade var(--mid) var(--ease); }
+.item:hover .item__art,
+.item.is-selected .item__art {
+  filter: drop-shadow(0 22px 30px rgb(28 27 25 / 0.22));
+}
+
+/* total: red whenever the haul gets pricier, green when it gets cheaper */
+.total__value.is-up   { color: var(--out, #d12d2d); }
+.total__value.is-down { color: #1f8f4e; }
+
+/* share: pick hauls */
+.share__menu { min-width: 250px; }
+.share__head { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink-3); }
+.share__all { font-size: 12px; font-weight: 700; color: var(--ink); text-decoration: underline; }
+.share__pick { cursor: pointer; justify-content: flex-start; }
+.share__pick input { position: absolute; opacity: 0; width: 0; height: 0; }
+.share__pick small { margin-left: auto; white-space: nowrap; }
+.share__box { flex: none; width: 16px; height: 16px; border-radius: 5px; border: 2px solid var(--ink-3); transition: background var(--fast), border-color var(--fast); }
+.share__pick.is-on .share__box { background: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 3px #fff; }
+.share__go { display: block; width: 100%; margin-top: 6px; height: 40px; border-radius: 12px; background: var(--ink); color: #fff; font-weight: 700; }
+.share__go:disabled { opacity: 0.4; cursor: default; }
+
+/* favorites */
+.popup { padding-bottom: 14px; }
+.popup__star {
+  position: absolute; right: 10px; bottom: 10px;
+  width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: var(--ink-3);
+  transition: color var(--fast), transform var(--fast) var(--ease), background var(--fast);
+}
+.popup__star:hover { color: var(--ink); background: var(--surface); transform: scale(1.1); }
+.popup__star.is-on { color: #e0a100; }
+.tray__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 6px 6px; min-height: 24px; }
+.tray__favs {
+  margin-left: auto;
+  height: 26px; padding: 0 10px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 700; color: var(--ink-2);
+  background: var(--surface); box-shadow: var(--shadow-sm);
+  transition: background var(--fast), color var(--fast), transform var(--fast) var(--ease);
+}
+.tray__favs:hover { color: var(--ink); transform: translateY(-1px); }
+.tray__favs.is-on { background: var(--ink); color: #fff; }
