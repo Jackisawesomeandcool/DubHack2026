@@ -6,7 +6,7 @@ import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
-import ControlHints from './ControlHints.jsx';
+import Backdrop from './Backdrop.jsx';
 import { randomFit, suggest } from '../lib/api.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, swapItem, withPositions } from '../lib/haul.js';
 
@@ -75,6 +75,7 @@ export default function HaulCreator() {
 
   return (
     <main className="app">
+      <Backdrop index={current} />
       <header className="bar">
         <div className="bar__right">
           <HaulTotal total={total} />
@@ -113,7 +114,6 @@ export default function HaulCreator() {
           />
         )}
         <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
-        <ControlHints />
       </footer>
     </main>
   );

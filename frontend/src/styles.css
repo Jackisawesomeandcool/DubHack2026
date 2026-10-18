@@ -18,6 +18,10 @@
   --red: #e8342a;
   --pink: #ee7fd6;
   --shadow-ink: rgb(0 6 40 / 0.6);
+  --bg0: #000f52;
+  --bg1: #0430a8;
+  --bg2: #0b49de;
+  --word: rgb(60 130 255 / 0.2);
 
   --r-xl: 0px;
   --r-pill: 0px;
@@ -658,10 +662,10 @@ button:focus-visible, input:focus-visible {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: -1; /* lives inside .app's stacking context, behind everything in it */
   overflow: hidden;
   pointer-events: none;
-  background: radial-gradient(ellipse 90% 75% at 28% 38%, #0b49de 0%, #0430a8 38%, #000f52 85%);
+  background: radial-gradient(ellipse 90% 75% at 28% 38%, var(--bg2) 0%, var(--bg1) 38%, var(--bg0) 85%);
 }
 .backdrop::before { /* moving diagonal streaks */
   content: "";
@@ -670,16 +674,16 @@ button:focus-visible, input:focus-visible {
   background: repeating-linear-gradient(-12deg, rgb(255 255 255 / 0.055) 0 2px, transparent 2px 46px);
   animation: drift 12s linear infinite;
 }
-.backdrop::after { /* huge faded word */
-  content: "HAUL";
+.backdrop__word { /* huge faded fit number */
   position: absolute;
-  right: -3vw;
-  bottom: -8vw;
-  font: italic 900 32vw/1 var(--display);
+  right: -2vw;
+  bottom: -5vw;
+  font: italic 900 24vw/1 var(--display);
   letter-spacing: -0.02em;
-  color: rgb(60 130 255 / 0.2);
+  color: var(--word);
   transform: rotate(-6deg);
   white-space: nowrap;
+  animation: fade 500ms var(--ease);
 }
 @keyframes drift { to { transform: translate(-19px, -90px); } } /* 2 stripe periods = seamless loop */
 
@@ -710,7 +714,7 @@ button:focus-visible, input:focus-visible {
 .fits__tab {
   --rot: -7deg;
   --x: 0px;
-  --tint: #9fd6ff;
+  --tint: var(--ice);
   position: relative;
   isolation: isolate;
   height: auto;
@@ -726,10 +730,10 @@ button:focus-visible, input:focus-visible {
   transform-origin: left center;
   transition: transform var(--mid) var(--ease), color var(--fast);
 }
-.fits__tab:nth-child(4n + 1) { --rot: -7deg;  --x: 0px;  --tint: #9fd6ff; margin-top: 0; }
-.fits__tab:nth-child(4n + 2) { --rot: -11deg; --x: 20px; --tint: #6fdcff; }
-.fits__tab:nth-child(4n + 3) { --rot: -4deg;  --x: 6px;  --tint: #b4e8ff; }
-.fits__tab:nth-child(4n + 4) { --rot: -9deg;  --x: 26px; --tint: #5fc8f5; }
+.fits__tab:nth-child(4n + 1) { --rot: -7deg;  --x: 0px;  --tint: var(--ice); margin-top: 0; }
+.fits__tab:nth-child(4n + 2) { --rot: -11deg; --x: 20px; --tint: color-mix(in srgb, var(--cyan) 70%, var(--ice)); }
+.fits__tab:nth-child(4n + 3) { --rot: -4deg;  --x: 6px;  --tint: color-mix(in srgb, #fff 38%, var(--ice)); }
+.fits__tab:nth-child(4n + 4) { --rot: -9deg;  --x: 26px; --tint: color-mix(in srgb, var(--blue) 30%, var(--cyan)); }
 
 .fits__tab:hover { background: none; color: #fff; transform: translateX(calc(var(--x) + 8px)) rotate(var(--rot)) skewX(-8deg) scale(1.05); }
 .fits__tab:active { transform: translateX(var(--x)) rotate(var(--rot)) skewX(-8deg) scale(0.96); }
@@ -766,7 +770,7 @@ button:focus-visible, input:focus-visible {
   color: var(--cyan);
   text-shadow: none;
   border: 0;
-  border-bottom: 3px dashed rgb(95 227 255 / 0.6);
+  border-bottom: 3px dashed color-mix(in srgb, var(--cyan) 60%, transparent);
   padding: 2px 6px;
   align-self: flex-start;
 }
@@ -789,7 +793,7 @@ button:focus-visible, input:focus-visible {
 }
 .share__btn:hover:not(:disabled) { transform: skewX(-12deg) translate(-1px, -2px); background: #fff; box-shadow: 6px 6px 0 var(--red); }
 .share__btn:active:not(:disabled) { transform: skewX(-12deg) scale(0.95); }
-.share__btn:disabled { background: rgb(159 214 255 / 0.22); color: rgb(255 255 255 / 0.45); box-shadow: none; }
+.share__btn:disabled { background: color-mix(in srgb, var(--ice) 22%, transparent); color: rgb(255 255 255 / 0.45); box-shadow: none; }
 .share__btn.is-done { background: var(--ok); color: #fff; }
 .share__btn.is-open { background: #fff; color: var(--ink); box-shadow: 4px 4px 0 var(--red); }
 .share__menu { border-radius: 0; border-left: 6px solid var(--red); box-shadow: var(--shadow-md); }
@@ -833,7 +837,7 @@ button:focus-visible, input:focus-visible {
 }
 .item__art { filter: drop-shadow(0 10px 14px rgb(0 10 70 / 0.22)); }
 .item:hover .item__art,
-.item.is-selected .item__art { filter: drop-shadow(0 0 0 transparent) drop-shadow(6px 8px 0 rgb(10 63 208 / 0.35)); }
+.item.is-selected .item__art { filter: drop-shadow(0 0 0 transparent) drop-shadow(6px 8px 0 color-mix(in srgb, var(--blue) 35%, transparent)); }
 
 /* ------------------------------------------------------------------ options tray */
 .tray { border-radius: 0; border-left: 8px solid var(--red); box-shadow: var(--shadow-md); padding-left: 14px; }
@@ -874,7 +878,7 @@ button:focus-visible, input:focus-visible {
 /* ------------------------------------------------------------------ search history */
 .bubble {
   border-radius: 0;
-  background: rgb(95 227 255 / 0.92);
+  background: color-mix(in srgb, var(--cyan) 92%, transparent);
   color: var(--ink);
   font: italic 700 16px/1.15 var(--display);
   letter-spacing: 0.04em;
@@ -906,7 +910,7 @@ button:focus-visible, input:focus-visible {
 }
 .popup__link:hover { background: var(--red); color: #fff; }
 
-/* ------------------------------------------------------------------ prompt bar + control hints */
+/* ------------------------------------------------------------------ prompt bar */
 .dock { gap: 8px; }
 .prompt {
   height: 58px;
@@ -942,33 +946,9 @@ button:focus-visible, input:focus-visible {
   50%      { transform: skewX(10deg) scale(1);    opacity: 1; }
 }
 
-.hints {
-  display: flex;
-  justify-content: flex-end;
-  gap: 22px;
-  width: min(680px, 100%);
-  margin: 0;
-  padding: 0 6px;
-  list-style: none;
-  font: italic 800 17px/1 var(--display);
-  letter-spacing: 0.14em;
-  color: var(--cyan);
-  text-shadow: 2px 2px 0 var(--shadow-ink);
-}
-.hints li { display: flex; align-items: center; gap: 8px; }
-.hints b {
-  display: grid;
-  place-items: center;
-  min-width: 24px; height: 24px;
-  border: 2px solid var(--cyan);
-  border-radius: 50%;
-  font: 800 13px/1 var(--font);
-  letter-spacing: 0;
-}
 
 /* ------------------------------------------------------------------ small screens */
 @media (max-width: 760px) {
-  .hints { display: none; }
   .stage { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); gap: 10px; }
   .fits { flex-direction: row; flex-wrap: wrap; gap: 4px 14px; padding: 4px 6px 0; }
   .fits__tab { font-size: 26px; margin-top: 0; --x: 0px; }
@@ -976,5 +956,48 @@ button:focus-visible, input:focus-visible {
   .share__btn { font-size: 18px; padding: 0 16px; }
   .prompt { height: 52px; }
   .prompt__input { font-size: 18px; }
-  .backdrop::after { font-size: 55vw; bottom: -4vw; }
+  .backdrop__word { font-size: 40vw; bottom: -2vw; }
+}
+
+/* ------------------------------------------------------------------ per-fit palettes
+   FIT 01 = the default blue (tokens in :root). Fits 02-05 override the menu colors below;
+   the canvas keeps --surface (white). Fit 06+ would loop (index % 5) if MAX_FITS is raised. */
+:root[data-palette="1"] { /* red / black / white */
+  --bg0: #1c0006; --bg1: #8a0014; --bg2: #e0172c; --word: rgb(20 0 6 / 0.3);
+  --blue: #c4122a; --cyan: #ffffff; --ice: #ffc9c9; --red: #0b0b0f; --pink: #ff9aa8;
+  --ink: #14000a; --ink-2: #7a1020; --ink-3: #b86a74; --shadow-ink: rgb(25 0 6 / 0.7);
+}
+:root[data-palette="2"] { /* gold / black */
+  --bg0: #1f1500; --bg1: #6b4a00; --bg2: #c28f00; --word: rgb(30 18 0 / 0.3);
+  --blue: #b88500; --cyan: #ffe66b; --ice: #fff0b0; --red: #14110a; --pink: #ffb347;
+  --ink: #1f1500; --ink-2: #6b4a00; --ink-3: #a98a3a; --shadow-ink: rgb(25 16 0 / 0.7);
+}
+:root[data-palette="3"] { /* violet / magenta */
+  --bg0: #14002e; --bg1: #4a14a6; --bg2: #7a35f0; --word: rgb(150 90 255 / 0.25);
+  --blue: #6a2ee0; --cyan: #ff9ef2; --ice: #dcc6ff; --red: #ffd23f; --pink: #ff6bd6;
+  --ink: #12002e; --ink-2: #4a2a8f; --ink-3: #8f7ac4; --shadow-ink: rgb(14 0 40 / 0.7);
+}
+:root[data-palette="4"] { /* mint / orange */
+  --bg0: #00201a; --bg1: #006b52; --bg2: #10b585; --word: rgb(60 255 180 / 0.18);
+  --blue: #0e9a73; --cyan: #b8ffe3; --ice: #a0f5d4; --red: #ff6a2b; --pink: #ffd166;
+  --ink: #00241c; --ink-2: #1c6b55; --ink-3: #6cb3a0; --shadow-ink: rgb(0 28 22 / 0.7);
+}
+
+/* ------------------------------------------------------------------ palette-change wipe:
+   a thick black jagged band sweeps diagonally across the whole screen (Backdrop.jsx swaps
+   the palette at the halfway point, when the band covers everything) */
+.wipe { position: fixed; inset: 0; z-index: 300; overflow: hidden; pointer-events: none; }
+.wipe__band {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 190vmax;
+  height: 260vmax;
+  background: #000;
+  clip-path: polygon(2.2% 0.00%, 0.4% 2.78%, 3.4% 5.56%, 0% 8.33%, 0% 11.11%, 5% 13.89%, 0% 16.67%, 2.2% 19.44%, 5% 22.22%, 0% 25.00%, 5% 27.78%, 0.4% 30.56%, 0% 33.33%, 0% 36.11%, 3.4% 38.89%, 3.4% 41.67%, 0% 44.44%, 0.4% 47.22%, 0% 50.00%, 5% 52.78%, 3.4% 55.56%, 0% 58.33%, 5% 61.11%, 0% 63.89%, 0.4% 66.67%, 5% 69.44%, 0% 72.22%, 5% 75.00%, 5% 77.78%, 3.4% 80.56%, 0% 83.33%, 0.4% 86.11%, 0% 88.89%, 5% 91.67%, 0.4% 94.44%, 2.2% 97.22%, 3.4% 100.00%, 99.6% 100.00%, 95% 97.22%, 100% 94.44%, 95% 91.67%, 97.8% 88.89%, 95% 86.11%, 99.6% 83.33%, 100% 80.56%, 95% 77.78%, 95% 75.00%, 99.6% 72.22%, 97.8% 69.44%, 100% 66.67%, 95% 63.89%, 100% 61.11%, 95% 58.33%, 100% 55.56%, 95% 52.78%, 99.6% 50.00%, 96.6% 47.22%, 95% 44.44%, 96.6% 41.67%, 97.8% 38.89%, 96.6% 36.11%, 95% 33.33%, 96.6% 30.56%, 97.8% 27.78%, 97.8% 25.00%, 99.6% 22.22%, 99.6% 19.44%, 99.6% 16.67%, 100% 13.89%, 95% 11.11%, 97.8% 8.33%, 95% 5.56%, 96.6% 2.78%, 97.8% 0.00%);
+  transform: translate(-50%, -50%) rotate(24deg) translateX(-160vmax);
+  animation: wipe 900ms cubic-bezier(0.7, 0, 0.3, 1) both;
+}
+.wipe__band--edge { width: 200vmax; background: var(--red); } /* thin accent edge peeking out */
+@keyframes wipe {
+  to { transform: translate(-50%, -50%) rotate(24deg) translateX(160vmax); }
 }
