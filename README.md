@@ -65,8 +65,8 @@ and sends it to the UI. Every visual comes directly from the listing site.
 price, URL, stock, photo URLs) collected 2026-10-17 across shoes, tops, outerwear, bottoms, hats, bags
 and socks. On first start the backend imports them into the catalog in the background, cutting out
 each photo locally (~1–2 min), so random hauls, swaps and searches work immediately with no search
-API and no scraping at runtime. Live sources (Google Custom Search, an AI key, or `WEB_SEARCH=1`) are
-optional extras that extend the catalog.
+API and no scraping at runtime. Search is catalog-only: add products with
+`ingest_sites.py` / `ingest_sitemap.py` (see docs/DATASET.md).
 
 **Speed: local catalog + nike.com search API.** On startup the backend warms a local catalog of
 popular Nike items (dunks, AF1, tech fleece, …) in the background, each stored with its finished
@@ -79,11 +79,11 @@ are served from a result cache. A background thread re-checks stock on the oldes
 (rate-limited, via the page's JSON-LD) and re-checks any product you place on the board; out-of-stock
 products are never served.
 
-Seed the catalog in advance (optional, a few minutes):
+Add products to the catalog (a few minutes each run):
 
 ```bash
-cd backend && python3 ingest.py            # product-only cutouts
-cd backend && python3 ingest.py --models   # also on-model cutouts
+cd backend && python3 ingest_sites.py --sites stussy,uniqlo,brandy --categories top,bottom --per-category 40
+cd backend && python3 ingest_sitemap.py --categories top,bottom --per-category 40   # Nike
 ```
 
 **Cutout pipeline.** For each product the backend picks the right photo (nike.com's API hands over a

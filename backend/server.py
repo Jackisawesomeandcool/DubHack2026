@@ -275,10 +275,8 @@ def quality_sweep() -> None:
 
 
 def main() -> None:
-    import gsearch
-    live = [n for n, on in (("google", gsearch.configured()), ("web", config.WEB_SEARCH), (llm.provider(), llm.configured())) if on]
     ranker_name = llm.provider() if llm.configured() else "keywords (set GEMINI_API_KEY for AI picks)"
-    mode = f"catalog search · ranked by {ranker_name}{' · live ingest: ' + ', '.join(live) if live else ''}"
+    mode = f"catalog search · ranked by {ranker_name}"
     print(f"Haul Curator API on http://{config.HOST}:{config.PORT}  —  {mode}")
     print(f"catalog: {catalog.count()} items · cutouts: flat-key + {config.CUTOUT_PROVIDER}")
     cutouts.warm()

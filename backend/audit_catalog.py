@@ -185,6 +185,7 @@ def _tidy(limit: int) -> None:
 def _delete(urls: list[str]) -> None:
     with catalog._lock:
         db = catalog._db()
+        db.executemany("INSERT OR IGNORE INTO blocked (url, removed_at, snapshot) VALUES (?,strftime('%s','now'),NULL)", [(u,) for u in urls])
         db.executemany("DELETE FROM products WHERE url=?", [(u,) for u in urls])
         db.commit()
     print(f"Removed {len(urls)} from the catalog; {catalog.count()} remain.")

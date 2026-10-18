@@ -2,6 +2,10 @@
 
 Last updated: 2026-10-17. Audience: DubHack2026 teammates (and their agents).
 
+> **Update 2026-10-18:** search is now catalog-only. The live sources described below (`nike.py` Nike API,
+> `websearch.py`, `gsearch.py`, the `ingest.py` warm-up and `merge_catalog.py`) were removed; `finder.py` no longer
+> calls them. Add products with `ingest_sites.py` / `ingest_sitemap.py`, and share them via `dataset.py` (docs/DATASET.md).
+
 ## TL;DR
 
 - **Demo mode (no key needed):** the app serves prompts, swaps and random fits from a local SQLite **catalog** of Nike products scraped once from Nike's public sitemap. Fast, free, and does not depend on any AI key.

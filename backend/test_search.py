@@ -219,7 +219,10 @@ class Finder(unittest.TestCase):
     def test_no_match_reason(self):
         with self.assertRaises(finder.NoMatch) as cm:
             finder.results("shoes under 1 dollar")
-        self.assertRegex(str(cm.exception), r"^No shoes under \$1 — cheapest is \$\d+")
+        self.assertRegex(str(cm.exception), r"^No shoes under \$1 — the closest is \$\d+")
+        near = cm.exception.closest                       # nearest-priced shoes, offered by the search bar
+        self.assertTrue(near and all(i["category"] == "shoes" and i["price"] > 1 for i in near))
+        self.assertEqual([i["price"] for i in near], sorted(i["price"] for i in near))
         with self.assertRaises(finder.NoMatch) as cm:
             finder.results("adidas jacket")
         self.assertEqual(str(cm.exception), "No adidas outerwear in the catalog")

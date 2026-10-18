@@ -151,6 +151,8 @@ def load(quiet: bool = False) -> dict:
     changed = False
     with catalog._lock:
         db = catalog._db()
+        # Products removed here with the review tool but not exported yet stay removed: the dataset must not bring them back.
+        removed |= {r[0] for r in db.execute("SELECT url FROM blocked")}
         for u in removed:
             if db.execute("SELECT 1 FROM products WHERE url=?", (u,)).fetchone():
                 db.execute("DELETE FROM products WHERE url=?", (u,))
@@ -215,13 +217,62 @@ def status() -> None:
     print(f"  removed in the dataset but still local: {len([u for u in removed if u in local])}")
 
 
+def resolve() -> None:
+    """Finish a git merge that conflicted on dataset/catalog.json: 3-way merge it per product and per field.
+
+        git pull --no-rebase          # stops with a conflict in backend/dataset/catalog.json
+        python3 dataset.py resolve    # writes the merged file
+        git add backend/dataset && git commit --no-edit
+
+    Per product: removed on either side -> stays removed; new on one side -> kept. When both sides have it,
+    each field takes the side that changed it since the common ancestor; if both changed the same field,
+    `color`/`color_src` take the other side's (shared colors) and everything else keeps yours (your crops).
+    """
+    import subprocess
+
+    def stage(n: int) -> dict[str, dict]:
+        try:
+            out = subprocess.check_output(["git", "show", f":{n}:backend/dataset/catalog.json"], text=True,
+                                          stderr=subprocess.DEVNULL, cwd=config.BACKEND_DIR)
+        except subprocess.CalledProcessError:
+            return {}
+        return {it["url"]: it for it in json.loads(out)["items"]}
+
+    base, ours, theirs = stage(1), stage(2), stage(3)
+    if not ours or not theirs:
+        sys.exit("No merge conflict on catalog.json in progress (run it right after `git pull` reports one).")
+    removed = _read_removed()
+    out: dict[str, dict] = {}
+    for u in set(ours) | set(theirs):
+        o, t, b = ours.get(u), theirs.get(u), base.get(u)
+        if u in removed:
+            continue
+        if o is None or t is None:
+            if b is not None:
+                continue                                  # one side removed it
+            out[u] = o or t
+            continue
+        merged = dict(o)
+        for k in set(o) | set(t):
+            if o.get(k) == t.get(k):
+                continue
+            ours_changed, theirs_changed = o.get(k) != (b or {}).get(k), t.get(k) != (b or {}).get(k)
+            if theirs_changed and (not ours_changed or k in ("color", "color_src")):
+                merged[k] = t.get(k)
+        out[u] = merged
+    _write_items(out)
+    print(f"merged catalog.json: {len(out)} products ({len(ours)} yours, {len(theirs)} theirs, {len(base)} common base).")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["export", "load", "status"])
+    ap.add_argument("cmd", choices=["export", "load", "status", "resolve"])
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
     if a.cmd == "export":
         export(a.quiet)
+    elif a.cmd == "resolve":
+        resolve()
     elif a.cmd == "load":
         s = load(a.quiet)
         if not a.quiet:
