@@ -110,16 +110,9 @@ def _refill() -> None:
             _refilling = False
 
 
-def _live_available() -> bool:
-    import config, gsearch
-    return gsearch.configured() or config.WEB_SEARCH or llm.configured()
-
-
 def ensure_pool() -> None:
-    """Kick off background building if the pool is short (needs a live source)."""
+    """Kick off background building if the pool is short."""
     global _refilling
-    if not _live_available():
-        return
     with _lock:
         if _refilling or not _short_modes(_read()):
             return

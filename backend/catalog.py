@@ -201,14 +201,6 @@ def known_urls(models: bool | None = None) -> set[str]:
     return {r["url"] for r in rows}
 
 
-def raw_urls(models: bool = False) -> set[str]:
-    """Listings still showing the retailer's own photo (no cutout built yet)."""
-    col = "cutout_m" if models else "cutout_p"
-    with _lock:
-        rows = _db().execute(f"SELECT url FROM products WHERE {col} LIKE 'http%'").fetchall()
-    return {r["url"] for r in rows}
-
-
 def count(models: bool | None = None) -> int:
     with _lock:
         if models is None:
