@@ -105,7 +105,7 @@ def stussy_item(p: dict) -> dict | None:
     if not imgs:
         return None
     return {
-        "name": title.title() if title.isupper() else title, "brand": str(p.get("vendor") or "Stüssy"), "price": min(prices),
+        "name": title.title() if title.isupper() else title, "brand": "Stüssy",  # the feed's "vendor" is often a fulfilment name ("Radial"), not the brand "price": min(prices),
         "url": "https://www.stussy.com/products/" + str(p["handle"]), "category": cat,
         "candidates": imgs[:8], "tags": f"{ptype} {color}".lower(),
     }
