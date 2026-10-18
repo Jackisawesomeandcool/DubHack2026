@@ -8,7 +8,7 @@ import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
 import Backdrop from './Backdrop.jsx';
 import AccountMenu from './AccountMenu.jsx';
-import { health, loadState, randomFit, saveState, seen, suggest } from '../lib/api.js';
+import { health, loadState, randomFit, saveState, saveStateBeacon, seen, suggest } from '../lib/api.js';
 import { loadUser, token } from '../lib/session.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, exportFits, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
 import { isFavorite, loadFavorites, saveFavorites, toggleFavorite } from '../lib/favorites.js';
@@ -51,12 +51,21 @@ export default function HaulCreator() {
   const signedIn = Boolean(loadUser() && token());
   const restored = useRef(false); // true once the account's saved state has been applied
   const saveTimer = useRef(null);
+  const historyForSave = (list) => list.filter((h) => !h.loading && !h.error).map(({ id, prompt, options }) => ({ id, prompt, options: options.filter((o) => !o.pending && !o.dropped) }));
+  const snapshot = useRef(null);
+  snapshot.current = { favorites, hauls: exportFits(fits), history: historyForSave(history) };
   useEffect(() => {
     if (!signedIn || !restored.current) return undefined;
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => saveState(favorites, exportFits(fits)), 600);
+    saveTimer.current = setTimeout(() => { const s = snapshot.current; saveState(s.favorites, s.hauls, s.history); }, 500);
     return () => clearTimeout(saveTimer.current);
-  }, [fits, favorites, signedIn]);
+  }, [fits, favorites, history, signedIn]);
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    const flush = () => { if (restored.current) { const s = snapshot.current; saveStateBeacon(s.favorites, s.hauls, s.history); } };
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, [signedIn]);
 
   // Swap session for the selected piece: alternatives are previewed on the
   // board and only kept when the user says so. `found` keeps the search
@@ -96,6 +105,11 @@ export default function HaulCreator() {
         const saved = await loadState().catch(() => null);
         if (saved) {
           if (saved.favorites.length) { setFavorites(saved.favorites); saveFavorites(saved.favorites); }
+          if (saved.history?.length) {
+            const entries = saved.history.map((h) => ({ ...h, loading: false, error: '' }));
+            setHistory(entries);
+            nextId.current = Math.max(0, ...entries.map((h) => Number(h.id) || 0)) + 1;
+          }
           const hauls = saved.hauls.filter((h) => h.items.length);
           if (hauls.length) {
             setFits(hauls.map((h) => ({ items: withPositions(h.items) })));
