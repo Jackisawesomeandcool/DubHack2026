@@ -6,7 +6,6 @@ import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
 import SearchHistory from './SearchHistory.jsx';
 import PromptBar from './PromptBar.jsx';
-import ModelsToggle from './ModelsToggle.jsx';
 import Backdrop from './Backdrop.jsx';
 import { health, randomFit, seen, suggest } from '../lib/api.js';
 import { MAX_FITS, MAX_ITEMS, addItem, emptyFit, fitTotal, moveItem, onBoard, removeItem, sameProduct, swapItem, withPositions } from '../lib/haul.js';
@@ -25,10 +24,9 @@ export default function HaulCreator() {
   const nextId = useRef(1);
   const booted = useRef(false);
 
-  // Models toggle: what gets pulled next (product-only cutouts vs on-model).
-  const [models, setModels] = useState(() => { try { return localStorage.getItem('haul:models') === '1'; } catch { return false; } });
-  const modelsRef = useRef(models);
-  modelsRef.current = models;
+  // Product-only cutouts everywhere (no on-model shots).
+  const modelsRef = useRef(false);
+  try { localStorage.removeItem('haul:models'); } catch {}
   const [setup, setSetup] = useState(null); // backend readiness notice
   const [dragOut, setDragOut] = useState(null); // piece currently held outside the board
 
@@ -257,10 +255,7 @@ export default function HaulCreator() {
             onDismiss={() => { if (active) setActiveId(null); else { revertSwap(swapRef.current); setSwap(null); } }}
           />
         )}
-        <div className="dock__row">
-          <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
-          <ModelsToggle value={models} onChange={(v) => { setModels(v); try { localStorage.setItem('haul:models', v ? '1' : '0'); } catch {} }} />
-        </div>
+        <PromptBar onSubmit={find} busy={Boolean(active?.loading)} />
       </footer>
     </main>
   );
