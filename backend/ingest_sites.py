@@ -280,6 +280,10 @@ def main() -> None:
     bad = cats - set(CATEGORIES)
     if bad:
         sys.exit(f"Unknown categories {sorted(bad)}; choose from {list(CATEGORIES)}")
+    unknown = [x for x in sites if x not in ("stussy", "uniqlo")]
+    if unknown:
+        sys.exit(f"Unknown site(s) {unknown}. This script does stussy and uniqlo; Nike is ingest_sitemap.py "
+                 "(same --categories / --per-category flags).")
     skipped = _load_skipped()
     plan: list[dict] = []
     for site in sites:

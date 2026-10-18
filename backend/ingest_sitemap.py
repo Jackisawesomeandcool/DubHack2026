@@ -81,18 +81,21 @@ def is_merch(slug: str) -> bool:
 MERCH_SHARE = 0.2  # with --merch some: about this fraction of each category is team/college merchandise
 
 
-def sample(urls: list[str], per_category: int, seed: int = 7, kids: bool = False, merch: str = "some") -> list[tuple[str, str]]:
+def sample(urls: list[str], per_category: int, seed: int = 7, kids: bool = False, merch: str = "none",
+           cats: set[str] | None = None, skip: set[str] | None = None) -> list[tuple[str, str]]:
     """Round-robin across categories so a small --limit still gives variety.
-    merch: "some" (default, ~20% merchandise per category), "none", or "all" (no cap)."""
+    merch: "none" (default), "some" (~20% merchandise per category), or "all" (no cap)."""
     rng = random.Random(seed)
     core: dict[str, list[str]] = {c: [] for c in CATEGORIES}
     team: dict[str, list[str]] = {c: [] for c in CATEGORIES}
     for u in urls:
+        if skip and u.split("?")[0] in skip:
+            continue                       # already in the catalog, hand-removed, or given up on earlier
         slug = u.rsplit("/t/", 1)[1].split("/")[0]
         if not kids and any(k in slug.lower().split("-") for k in _KIDS):
             continue
         cat = infer_category(slug)
-        if cat:
+        if cat and (not cats or cat in cats):
             (team if is_merch(slug) else core)[cat].append(u)
     for b in list(core.values()) + list(team.values()):
         rng.shuffle(b)
@@ -204,6 +207,28 @@ def apply_shard(plan: list, spec: str) -> list:
     return plan[i - 1::n]
 
 
+SKIPPED_FILE = catalog.config.DATA_DIR / "ingest_skipped.txt"      # shared with ingest_sites.py
+
+
+def _known_urls(retry_skipped: bool) -> set[str]:
+    """Everything we should not pick again: stored products, hand-removed ones, earlier give-ups."""
+    with catalog._lock:
+        db = catalog._db()
+        known = {r[0] for r in db.execute("SELECT url FROM products")} | {r[0] for r in db.execute("SELECT url FROM blocked")}
+    if not retry_skipped:
+        try:
+            known |= set(SKIPPED_FILE.read_text(encoding="utf-8").split())
+        except OSError:
+            pass
+    return known
+
+
+def _remember_skipped(url: str) -> None:
+    SKIPPED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(SKIPPED_FILE, "a", encoding="utf-8") as f:
+        f.write(url + "\n")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
@@ -212,7 +237,9 @@ def main() -> None:
     ap.add_argument("--delay", type=float, default=1.5, help="seconds between products")
     ap.add_argument("--models", action="store_true", help="also build on-model cutouts")
     ap.add_argument("--kids", action="store_true", help="include kids' / baby items")
-    ap.add_argument("--merch", choices=["some", "none", "all"], default="some", help="team/college merchandise: ~20%% per category (some, default), none, or all")
+    ap.add_argument("--categories", default="", help="only these, comma separated: top,bottom,outerwear,shoes,bag,headwear,accessory (default: all)")
+    ap.add_argument("--retry-skipped", action="store_true", help="try again products an earlier run gave up on")
+    ap.add_argument("--merch", choices=["some", "none", "all"], default="none", help="team/college merchandise: none (default), some (~20%% per category) or all")
     ap.add_argument("--purge-merch", action="store_true", help="delete already-stored merchandise (source=sitemap) and exit")
     ap.add_argument("--shard", default="", help="i/n: do only slice i of n (1-based) so teammates scrape different products; everyone must use the same other flags")
     ap.add_argument("--ai", action="store_true", help="use configured AI keys for photo choice")
@@ -223,14 +250,20 @@ def main() -> None:
             db = catalog._db()
             rows = db.execute("SELECT url FROM products WHERE source='sitemap'").fetchall()
             bad = [r["url"] for r in rows if is_merch(r["url"].rsplit("/t/", 1)[-1].split("/")[0])]
+            db.executemany("INSERT OR IGNORE INTO blocked (url, removed_at) VALUES (?, strftime('%s','now'))", [(u,) for u in bad])  # so the shared dataset drops them too
             db.executemany("DELETE FROM products WHERE url=?", [(u,) for u in bad])
             db.execute("DELETE FROM results")  # cached searches may point at removed rows
             db.commit()
         print(f"purged {len(bad)} merchandise products; catalog now {catalog.count()} items")
         return
 
+    cats = {c.strip() for c in args.categories.split(",") if c.strip()}
+    bad = cats - set(CATEGORIES)
+    if bad:
+        sys.exit(f"Unknown categories {sorted(bad)}; choose from {list(CATEGORIES)}")
     urls = sitemap_urls()
-    plan = apply_shard(sample(urls, args.per_category, kids=args.kids, merch=args.merch), args.shard)
+    skip = _known_urls(args.retry_skipped)          # --per-category then counts NEW products only
+    plan = apply_shard(sample(urls, args.per_category, kids=args.kids, merch=args.merch, cats=cats, skip=skip), args.shard)
     counts = {c: sum(1 for k, _ in plan if k == c) for c in CATEGORIES}
     print(f"sitemap: {len(urls)} product URLs; planned {len(plan)}: {counts}")
     if args.dry_run:
@@ -248,6 +281,8 @@ def main() -> None:
         tried += 1
         t0 = time.time()
         ok = ingest_one(cat, url, args.models)
+        if not ok:
+            _remember_skipped(url.split("?")[0])
         done += ok
         print(f"[{tried}] {cat:9s} {'ok  ' if ok else 'skip'} {time.time() - t0:4.1f}s · catalog {catalog.count()} · {url.rsplit('/t/', 1)[1][:60]}")
         time.sleep(args.delay)
