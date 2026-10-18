@@ -690,14 +690,13 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .popup__stock.is-out { color: var(--out); }
 .popup__dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .popup__remove {
-  margin-top: 10px;
-  font-size: 12px;
-  font-weight: 600;
+  margin-top: 8px;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
   color: var(--ink-3);
-  padding: 2px 0;
-  transition: color var(--fast);
+  transition: color var(--fast), background var(--fast), transform var(--fast) var(--ease);
 }
-.popup__remove:hover { color: var(--out); }
+.popup__remove:hover { color: var(--out); background: var(--surface); transform: scale(1.08); }
 .popup__link {
   display: inline-flex;
   align-items: center;

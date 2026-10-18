@@ -78,8 +78,10 @@ export default function ProductPopup({ item, anchor, onClose, onRemove, favorite
           {inStock ? 'In Stock' : 'Out of Stock'}
         </div>
         {onRemove && (
-          <button type="button" className="popup__remove" onClick={onRemove}>
-            remove
+          <button type="button" className="popup__remove" onClick={onRemove} aria-label="Remove from the fit" title="Remove from the fit">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
         )}
       </div>
