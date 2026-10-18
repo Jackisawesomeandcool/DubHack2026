@@ -1040,8 +1040,6 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 13px; font-weight: 600; }
-.field__row { display: flex; justify-content: space-between; align-items: baseline; }
-.field__row a { font-size: 13px; color: var(--ink-2); }
 .field input {
   height: 52px;
   padding: 0 18px;

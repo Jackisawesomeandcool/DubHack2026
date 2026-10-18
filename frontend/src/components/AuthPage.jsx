@@ -131,10 +131,7 @@ export default function AuthPage({ mode = 'login' }) {
             />
           </div>
           <div className="field">
-            <div className="field__row">
-              <label htmlFor="auth-pw">Password</label>
-              {!isSignup && <a href="#" onClick={(e) => e.preventDefault()}>Forgot?</a>}
-            </div>
+            <label htmlFor="auth-pw">Password</label>
             <input
               id="auth-pw" type="password" autoComplete={isSignup ? 'new-password' : 'current-password'}
               aria-describedby={isSignup ? 'auth-pw-hint' : undefined}
