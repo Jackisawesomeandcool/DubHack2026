@@ -491,21 +491,6 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   scroll-padding: 0 6px;
 }
 .tray__row > * { scroll-snap-align: start; }
-.tray__nav {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  z-index: 3;
-  width: 34px; height: 34px; border-radius: 50%;
-  background: var(--paper); color: var(--ink);
-  font-size: 22px; line-height: 1;
-  box-shadow: var(--shadow-md);
-  opacity: 0; pointer-events: none;
-  transition: opacity var(--fast), transform var(--fast) var(--ease);
-}
-.tray__nav--prev { left: -8px; }
-.tray__nav--next { right: -8px; }
-.tray__scroller.has-left .tray__nav--prev,
-.tray__scroller.has-right .tray__nav--next { opacity: 1; pointer-events: auto; }
-.tray__nav:hover { transform: translateY(-50%) scale(1.08); }
 .chip__unfav {
   position: absolute; top: -6px; right: -6px;
   width: 26px; height: 26px; border-radius: 50%;

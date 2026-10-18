@@ -29,7 +29,7 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd, 
         <span className="chip__price">{formatPrice(item.price)}</span>
         {swapMode && !onBoard && <span className="chip__swap">try</span>}
       </button>
-      {!swapMode && (
+      {!swapMode && !onUnfavorite && (
         <button
           type="button"
           className={`chip__badge${onBoard ? ' is-on' : ''}`}
@@ -56,20 +56,28 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd, 
 //               piece's spot — keep or undo from the board
 export default function OptionsTray({ title, options, loading, error, isOnBoard, previewing, full, swapMode, onSwap, onAdd, onDismiss, favMode = false, favCount = 0, onToggleFavMode, onUnfavorite }) {
   const row = useRef(null);
-  const [scroll, setScroll] = useState({ left: false, right: false });
 
-  // Show ‹ › only when the row actually overflows, and only on the side with more.
+  // The row scrolls; ← → move it. In a swap the keys step through the
+  // alternatives instead (handled by the board), and the row follows the
+  // piece being tried so it never sits off-screen.
   useEffect(() => {
-    const el = row.current;
-    if (!el) return undefined;
-    const update = () => setScroll({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
-    update();
-    el.addEventListener('scroll', update, { passive: true });
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
-  }, [options, loading]);
-  const nudge = (dir) => row.current?.scrollBy({ left: dir * Math.max(200, row.current.clientWidth * 0.7), behavior: 'smooth' });
+    if (swapMode) return undefined;
+    const onKey = (e) => {
+      if (e.target.closest?.('input, textarea')) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const el = row.current;
+      if (!el || el.scrollWidth <= el.clientWidth) return;
+      e.preventDefault();
+      el.scrollBy({ left: (e.key === 'ArrowRight' ? 1 : -1) * 220, behavior: 'smooth' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [swapMode]);
+  useEffect(() => {
+    if (!previewing || !row.current) return;
+    const el = row.current.querySelector('.chip.is-preview');
+    el?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [previewing]);
 
   if (!loading && !error && options.length === 0 && !swapMode && !favMode) return null;
 
@@ -95,8 +103,7 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
         <p className="tray__msg">{favMode ? 'no favorites yet — click a piece and tap the ★ on its card' : 'no alternatives found — try a search below'}</p>
       )}
       {!loading && !error && options.length > 0 && (
-        <div className={`tray__scroller${scroll.left ? ' has-left' : ''}${scroll.right ? ' has-right' : ''}`}>
-          <button type="button" className="tray__nav tray__nav--prev" onClick={() => nudge(-1)} aria-label="Scroll left" tabIndex={scroll.left ? 0 : -1}>‹</button>
+        <div className="tray__scroller">
           <div className="tray__row" ref={row}>
           {options.map((item) => (
             <OptionChip
@@ -112,7 +119,6 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
             />
           ))}
           </div>
-          <button type="button" className="tray__nav tray__nav--next" onClick={() => nudge(1)} aria-label="Scroll right" tabIndex={scroll.right ? 0 : -1}>›</button>
         </div>
       )}
       {!loading && !error && full && !swapMode && <p className="tray__note">board is full — select a piece to swap it</p>}
