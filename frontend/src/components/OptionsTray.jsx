@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatPrice, itemKey, sameProduct } from '../lib/haul.js';
+import { aiName } from '../lib/ai.js';
 
 function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd, onUnfavorite }) {
   const [failed, setFailed] = useState(false);
@@ -27,6 +28,7 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd, 
           <img src={item.image} alt="" draggable="false" onError={() => setFailed(true)} />
         </span>
         <span className="chip__price">{formatPrice(item.price)}</span>
+        {aiName(item) && <span className="chip__ai" title={`Suggested by ${aiName(item)}`} aria-label={`Suggested by ${aiName(item)}`}>✦</span>}
         {swapMode && !onBoard && <span className="chip__swap">try</span>}
       </button>
       {!swapMode && !onUnfavorite && (
@@ -54,7 +56,7 @@ function OptionChip({ item, onBoard, previewing, swapMode, full, onSwap, onAdd, 
 //   normal:     "+" adds the piece to the board (up to the board limit)
 //   swap mode:  (a piece is selected) clicking an option tries it in that
 //               piece's spot — keep or undo from the board
-export default function OptionsTray({ title, options, loading, error, isOnBoard, previewing, full, swapMode, onSwap, onAdd, onDismiss, favMode = false, favEmpty = false, noMatch = false, favCount = 0, onToggleFavMode, onUnfavorite }) {
+export default function OptionsTray({ title, options, loading, error, isOnBoard, previewing, full, swapMode, onSwap, onAdd, onDismiss, favMode = false, favEmpty = false, noMatch = false, aiError = '', aiPending = false, favCount = 0, onToggleFavMode, onUnfavorite }) {
   const row = useRef(null);
 
   // The row scrolls; ← → move it. In a swap the keys step through the
@@ -143,6 +145,8 @@ export default function OptionsTray({ title, options, loading, error, isOnBoard,
           </div>
         </div>
       )}
+      {!loading && !error && aiPending && <p className="tray__note tray__note--pending"><span aria-hidden="true">✦</span> Gemini is picking the best matches…</p>}
+      {!loading && !error && aiError && <p className="tray__note tray__note--ai">Gemini didn’t answer ({aiError}) — these are instant keyword results.</p>}
       {!loading && !error && full && !swapMode && <p className="tray__note">board is full — select a piece to swap it</p>}
     </div>
   );

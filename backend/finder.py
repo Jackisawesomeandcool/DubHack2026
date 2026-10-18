@@ -58,6 +58,11 @@ def _reason(it: intent_mod.Intent, near: list[dict] | None = None) -> str:
     return f"Nothing in the catalog matches \"{it.raw.strip()}\""
 
 
+class Picked(list):
+    """Results plus, when the AI was asked and its answer was not used, why (shown to the shopper)."""
+    ai_error = ""
+
+
 def _dedupe(items: list[dict]) -> list[dict]:
     """One entry per product name (the dataset has several colorways of some products)."""
     seen, out = set(), []
@@ -105,13 +110,16 @@ def _results(prompt: str, category: str | None = None, exclude: list[str] | None
         print(f"[finder] {it.describe()} · 0 candidates · {reason}", file=sys.stderr)
         raise NoMatch(reason, near)
 
-    picked, source = ranker.rank(prompt, it, pool, count, models, exclude, ai)
-    picked = _dedupe(picked)
+    picked, source, ai_error = ranker.rank(prompt, it, pool, count, models, exclude, ai)
+    picked = Picked(_dedupe(picked))
+    picked.ai_error = ai_error
     print(f"[finder] {it.describe()} · {len(pool)} candidates → {len(picked)} via {source} · {1000 * (time.time() - t0):.0f}ms",
           file=sys.stderr)
     if not picked:
         raise NoMatch(f"Nothing in the catalog matches \"{prompt.strip()}\"")
-    catalog.cache_results(it, models, picked, ai)
+    # A keyword answer that stood in for a failed/empty AI call is cached as a keyword answer, never as the AI one:
+    # otherwise one hiccup (quota, timeout) would keep serving unlabelled results after Gemini is back.
+    catalog.cache_results(it, models, picked, ai and source != "keywords")
     return picked
 
 
@@ -119,6 +127,26 @@ def stream(prompt: str, category: str | None = None, exclude: list[str] | None =
            models: bool = False, count: int = COUNT, local_first: bool = True, ai: bool = True):
     """NDJSON event generator for /api/suggest. `local_first` is accepted for
     compatibility and ignored: everything is local now."""
+    if ai and llm.configured() and not catalog.cached_results(intent_mod.parse(prompt, category), models, exclude or [], True):
+        # Not asked before: show the instant keyword matches now, then swap in Gemini's picks when they arrive.
+        try:
+            yield {"items": results(prompt, category, exclude, models, count, ai=False)}
+        except NoMatch as err:
+            yield {"items": []}
+            yield {"reason": str(err), "closest": err.closest}
+            yield {"done": True}
+            return
+        yield {"ai": "thinking"}
+        try:
+            final = results(prompt, category, exclude, models, count, ai=True)
+        except NoMatch:
+            final = Picked()
+        if getattr(final, "ai_error", ""):
+            yield {"ai_error": final.ai_error}
+        elif final:
+            yield {"replace": final}
+        yield {"done": True}
+        return
     try:
         items = results(prompt, category, exclude, models, count, ai)
     except NoMatch as err:
@@ -127,6 +155,8 @@ def stream(prompt: str, category: str | None = None, exclude: list[str] | None =
         yield {"done": True}
         return
     yield {"items": items}
+    if getattr(items, "ai_error", ""):
+        yield {"ai_error": items.ai_error}
     yield {"done": True}
 
 

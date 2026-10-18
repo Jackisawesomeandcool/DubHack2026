@@ -155,7 +155,7 @@ def search_products(prompt: str, category: str | None, exclude: list[str], count
     return items
 
 
-PICK_SYSTEM = """You are a personal shopper choosing from a store's own catalog. You never chat or explain.
+PICK_SYSTEM = """You are a personal shopper choosing from a store's own catalog. You do not chat; your only output is the JSON below.
 
 You get a shopper's request and a numbered list of the products available (brand, name, price,
 category, color — read from the product photo, "-" if unknown). Pick the products that best answer the request, best first.
@@ -178,7 +178,18 @@ Rules:
 - Otherwise pick the closest matches; vary models rather than listing near-duplicates.
 - The list is already limited to what the shopper may buy, so ALWAYS return picks: choose the closest
   matches even when none is perfect. Return an empty list only if the request is gibberish.
-Reply with ONLY a JSON object: {"picks": [{"n": <number>, "why": "<one short line>"}]}"""
+- EVERY pick needs a "why": the shopper reads it under the product, so make it one short sentence (max
+  10 words) saying what about THIS product fits THEIR request, in plain friendly words. Good: "Soft fleece that keeps you warm on a cool fall day." / "Baggy dark denim, just
+  the relaxed streetwear look you asked for." Bad: "Good match." / "Matches your request." / the list number.
+Reply with ONLY a JSON object: {"picks": [{"n": <number>, "why": "<one sentence>"}]}"""
+
+
+def one_sentence(text, limit: int = 140) -> str:
+    """The reason shown under a product: its first sentence only, trimmed."""
+    t = " ".join(str(text or "").split())
+    m = re.match(r"(.+?[.!?])(\s|$)", t)
+    t = m.group(1) if m else t
+    return t if len(t) <= limit else t[: limit - 1].rstrip(" ,;:") + "…"
 
 
 def pick_products(prompt: str, lines: list[str], count: int) -> list[dict]:
@@ -188,22 +199,25 @@ def pick_products(prompt: str, lines: list[str], count: int) -> list[dict]:
     payload = {
         "systemInstruction": {"parts": [{"text": PICK_SYSTEM}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
-        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json", "maxOutputTokens": 2048},
+        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json", "maxOutputTokens": 4096},
     }
     text = _text(_post(config.GEMINI_MODEL, payload, timeout=45))
     try:
         data = _parse_json(text)
     except GeminiError:
         # Truncated or chatty reply: salvage the numbers that were written ({"n": 12, ...}).
+        # keep the reasons of the picks that were written completely: {"n": 12, "why": "..."}
+        pairs = re.findall(r'"n"\s*:\s*(\d+)\s*,\s*"why"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
         nums = re.findall(r'"n"\s*:\s*(\d+)', text)
         if not nums:
             raise
-        data = {"picks": [{"n": int(n)} for n in nums]}
+        whys = {int(n): w.replace('\\"', '"') for n, w in pairs}
+        data = {"picks": [{"n": int(n), "why": whys.get(int(n), "")} for n in nums]}
     picks = data.get("picks", []) if isinstance(data, dict) else data
     out = []
     for p in picks if isinstance(picks, list) else []:
         try:
-            out.append({"n": int(p["n"] if isinstance(p, dict) else p), "why": str(p.get("why", "") if isinstance(p, dict) else "")[:160]})
+            out.append({"n": int(p["n"] if isinstance(p, dict) else p), "why": one_sentence(p.get("why", "") if isinstance(p, dict) else "")})
         except (KeyError, TypeError, ValueError):
             continue
     return out

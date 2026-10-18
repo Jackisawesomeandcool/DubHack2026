@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import FitSelector from './FitSelector.jsx';
 import HaulTotal from './HaulTotal.jsx';
 import ShareControl from './ShareControl.jsx';
+import StoreLinks from './StoreLinks.jsx';
 import ThemeControl from './ThemeControl.jsx';
 import FashionCanvas from './FashionCanvas.jsx';
 import OptionsTray from './OptionsTray.jsx';
@@ -165,7 +166,10 @@ export default function HaulCreator() {
     try {
       const items = await suggest(prompt, null, fit.items.map((i) => i.name), (partial) =>
         patchHistory(id, { options: partial, loading: false }), modelsRef.current,
-      (note) => setSearchNote({ id, ...note }));
+      (note) => {
+        if ('aiPending' in note || note.aiError) patchHistory(id, { aiPending: Boolean(note.aiPending), ...(note.aiError ? { aiError: note.aiError } : {}) });
+        else setSearchNote({ id, ...note });
+      });
       patchHistory(id, { options: items, loading: false });
     } catch {
       patchHistory(id, { loading: false, error: 'couldn’t find that — try again' });
@@ -320,6 +324,7 @@ export default function HaulCreator() {
         <div className="bar__right">
           <HaulTotal total={total} resetKey={`${fit.id}:${loadingFit}`} pendingTotal={dragOut ? total - (Number(dragOut.price) || 0) : null} />
           <ThemeControl />
+          <StoreLinks fit={fit} disabled={loadingFit} />
           <ShareControl fits={fits} current={current} disabled={!hasAnyItems || loadingFit} />
           <AccountMenu />
         </div>
@@ -374,6 +379,8 @@ export default function HaulCreator() {
             favMode={favMode}
             favEmpty={trayFavEmpty}
             noMatch={trayNoMatch}
+            aiError={swap || favMode ? '' : active?.aiError}
+            aiPending={!swap && !favMode && Boolean(active?.aiPending)}
             favCount={favorites.length}
             onToggleFavMode={toggleFavMode}
             onUnfavorite={toggleFav}

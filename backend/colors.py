@@ -170,8 +170,8 @@ def _loop() -> None:
             n = pixel_pass()
             if n:
                 print(f"[colors] pixel pass: {n} products · {progress()}", file=sys.stderr)
-            done, why = vision_pass()
-            if done or why not in ("complete", "no-key"):
+            done, why = vision_pass() if config.COLOR_VISION else (0, "off")
+            if done or why not in ("complete", "no-key", "off"):
                 print(f"[colors] vision pass: {done} products ({why}) · {progress()}", file=sys.stderr)
         except Exception as err:  # noqa: BLE001 — never kill the thread
             print(f"[colors] sweep error: {err}", file=sys.stderr)

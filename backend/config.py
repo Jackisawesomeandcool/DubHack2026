@@ -27,6 +27,9 @@ _load_dotenv(BACKEND_DIR / ".env")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 GEMINI_VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "").strip() or GEMINI_MODEL
+# Background "verify every product's color with Gemini vision" sweep. Off by default: pixel colors already cover the
+# catalog, and the sweep spends the free key's request quota (~13 calls/min on every start) that search needs.
+COLOR_VISION = os.environ.get("COLOR_VISION", "").strip().lower() in ("1", "true", "yes", "on")
 GEMINI_BASE_URL = os.environ.get("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
 
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "").strip()

@@ -35,6 +35,12 @@ export async function suggest(prompt, category, exclude, onUpdate, models = fals
     else if (ev.image) items[ev.index] = { ...items[ev.index], image: ev.image, pending: false };
     else if (ev.drop) items[ev.index] = { ...items[ev.index], dropped: true };
     else if (ev.reason) onNote?.({ reason: ev.reason, closest: Array.isArray(ev.closest) ? ev.closest : [] });
+    else if (ev.ai) onNote?.({ aiPending: true });                       // instant results are showing; Gemini is still picking
+    else if (ev.replace) {                                                // Gemini's picks (+ keyword fill) replace the instant ones
+      items = ev.replace.map((i) => ({ ...i, pending: !i.image }));
+      onNote?.({ aiPending: false });
+    } else if (ev.ai_error) onNote?.({ aiError: String(ev.ai_error), aiPending: false }); // AI was on but its answer wasn't used
+    else if (ev.done) onNote?.({ aiPending: false });
     emit();
   };
 
@@ -97,7 +103,13 @@ export async function loadState() {
   return res.json();
 }
 
+// After "clear my data" the page reloads; nothing may re-upload the board that was just wiped.
+let frozen = false;
+export function freezeSaves() { frozen = true; }
+export function thawSaves() { frozen = false; }
+
 export function saveState(favorites, hauls, history) {
+  if (frozen) return Promise.resolve(false);
   return fetch('/api/me/state', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -108,6 +120,7 @@ export function saveState(favorites, hauls, history) {
 
 // Last-chance save when the tab closes (no headers possible: token in the body).
 export function saveStateBeacon(favorites, hauls, history) {
+  if (frozen) return;
   try {
     const token = JSON.parse(localStorage.getItem('haul:token') || 'null');
     if (!token) return;

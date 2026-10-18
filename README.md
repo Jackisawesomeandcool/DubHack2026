@@ -16,6 +16,14 @@ hover for the price, click for name / brand / stock and a link to the listing.
 - **Favorites:** star listings, view them in the tray, newest first.
 - **Share:** send one or several hauls as a read-only link (`/h/<id>`), positions included.
 - **Accounts:** sign up / log in to keep favorites, hauls and search history across devices.
+- **AI-powered fits switch:** the pill in the search bar turns Gemini ranking on or off (off = instant keyword results).
+  With it on, instant keyword results show first and Gemini's picks (the model reads ~80 candidates and names 10, each with a
+  one-line reason) replace the top of the list a moment later; `AI_POOL` / `AI_PICKS` in `ranker.py` trade accuracy for speed.
+- **Why this piece:** pieces Gemini picked carry a small ✦ in the results tray; clicking one on the board shows
+  "Suggested by Gemini!" with a one-line reason. The note travels with shared links.
+- **Store links:** the *Store links* window (next to Share) lists every piece on the board with its store, price and total, plus *Copy list*.
+- **Privacy controls:** the account menu has *Clear my data* (keeps the account) and *Delete account*; both confirm first.
+  Links already shared stay viewable.
 - **Color themes:** Studio, Midnight, Maroon, Blush, Sky and Sage; the Theme button sits left of Share and the choice is remembered per browser.
 - **Models toggle:** product-only cutouts (default) or on-model photos where available.
 
@@ -119,7 +127,8 @@ start, and skipped by the scrapers.
 
 | Variable | Purpose |
 |----------|---------|
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | AI ranking, vision photo choice, product colors |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | AI ranking, vision photo choice |
+| `COLOR_VISION=1` | optional background sweep that double-checks every product's color with Gemini vision (off by default: it uses up the free key's quota that search needs) |
 | `XAI_API_KEY` | use xAI Grok instead of Gemini (leave the Gemini key empty) |
 | `ALLOWED_DOMAINS` | store restriction in the AI prompts (default `nike.com`) |
 | `PORT`, `HOST` | server address (default 127.0.0.1:8000) |
@@ -136,6 +145,7 @@ Keys are read only by the Python backend and never reach the browser.
 | POST | `/api/share` · GET `/api/share/<id>` | create / read a shared link (`{fits}`) |
 | POST | `/api/seen` | note products in play so their stock is re-checked |
 | POST | `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout` · GET `/api/auth/me` | accounts |
+| POST | `/api/auth/clear-data`, `/api/auth/delete-account` | signed in: wipe favorites / hauls / history, or remove the account and every session |
 | GET / PUT | `/api/me/state` | signed-in favorites, hauls and search history |
 | GET | `/api/health` | cutout / catalog readiness |
 

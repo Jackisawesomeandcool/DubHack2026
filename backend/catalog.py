@@ -145,16 +145,23 @@ def set_stock(url: str, stock: str) -> None:
         _db().commit()
 
 
+def _cache_entry(item: dict):
+    """A product URL, or {u, by, why} for an AI pick so the reason survives a cache hit."""
+    if not item.get("by"):
+        return _url_key(item)
+    return {"u": _url_key(item), "by": item["by"], "why": item.get("why", "")}
+
+
 def cache_results(intent_: Intent, models: bool, items: list[dict], ai: bool = False) -> None:
     key = _result_key(intent_, models, ai)
     with _lock:
         _db().execute("INSERT OR REPLACE INTO results (key, urls, created) VALUES (?,?,?)",
-                      (key, json.dumps([_url_key(i) for i in items if i.get("image")]), time.time()))
+                      (key, json.dumps([_cache_entry(i) for i in items if i.get("image")]), time.time()))
         _db().commit()
 
 
 # ---------------------------------------------------------------- read
-KEY_VERSION = "v3"   # bump when the key format changes; old rows simply never match again
+KEY_VERSION = "v5"   # bump when the key format changes; old rows simply never match again
 
 
 def _result_key(intent_: Intent, models: bool, ai: bool = False) -> str:
@@ -176,10 +183,15 @@ def cached_results(intent_: Intent, models: bool, exclude: list[str], ai: bool =
             return None
         ex = {n.lower() for n in exclude}
         out = []
-        for url in json.loads(row["urls"]):
+        for entry in json.loads(row["urls"]):
+            url = entry["u"] if isinstance(entry, dict) else entry
             r = _db().execute("SELECT * FROM products WHERE url=? AND stock='in_stock'", (url,)).fetchone()
             if r and r["name"].lower() not in ex and intent_mod.matches(_filter_item(r, models), intent_):
                 item = _row_to_item(r, models)
+                if isinstance(entry, dict):
+                    item["by"] = entry.get("by")
+                    if entry.get("why"):
+                        item["why"] = entry["why"]
                 if item["image"]:
                     out.append(item)
         return out

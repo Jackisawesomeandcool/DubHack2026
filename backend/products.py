@@ -80,6 +80,11 @@ def normalize(raw: dict) -> dict | None:
     for k in ("image_product", "image_model"):  # hints from fast sources, used by cutouts
         if raw.get(k):
             item[k] = _url(raw.get(k))
+    if raw.get("by") in ("gemini", "xai"):       # AI pick: who suggested it, and the reason shown to the shopper
+        item["by"] = raw["by"]
+        why = str(raw.get("why") or "").strip()[:160]
+        if why:
+            item["why"] = why
     x, y = _pct(raw.get("x")), _pct(raw.get("y"))
     if x is not None and y is not None:
         item["x"], item["y"] = x, y

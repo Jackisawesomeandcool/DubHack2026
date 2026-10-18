@@ -206,6 +206,39 @@ def stub_pool(stub):
     return catalog.candidates(parse("pants similar in style to Stüssy Junya Cargo Pants", "bottom"), False, ["Junya Cargo Pants"])
 
 
+class Accounts(unittest.TestCase):
+    def setUp(self):
+        import auth
+        self.auth = auth
+        auth._conn = None
+        auth.DB_PATH = config.DATA_DIR / "users-test.sqlite"
+        if auth.DB_PATH.exists():
+            auth.DB_PATH.unlink()
+
+    def test_clear_data_keeps_the_account(self):
+        a = self.auth
+        user, tok = a.signup("Ann", "ann", "ann@x.co", "password1")
+        a.set_state(user["id"], [{"name": "x"}], [{"items": [{"name": "y"}]}], [{"prompt": "hi"}])
+        a.clear_data(user["id"])
+        self.assertEqual(a.get_state(user["id"])["favorites"], [])
+        self.assertEqual(a.get_state(user["id"])["hauls"], [])
+        self.assertEqual(a.user_for(tok)["username"], "ann")
+        a.login("ann", "password1")
+
+    def test_delete_account_removes_everything_and_signs_out_every_device(self):
+        a = self.auth
+        user, tok = a.signup("Ann", "ann", "ann@x.co", "password1")
+        _, tok2 = a.login("ann@x.co", "password1")
+        a.set_state(user["id"], [{"name": "x"}], [], [])
+        a.delete_account(user["id"])
+        self.assertIsNone(a.user_for(tok))
+        self.assertIsNone(a.user_for(tok2))
+        self.assertEqual(a.get_state(user["id"])["favorites"], [])
+        with self.assertRaises(a.AuthError):
+            a.login("ann", "password1")
+        a.signup("Ann", "ann", "ann@x.co", "password1")        # the name and email are free again
+
+
 class Finder(unittest.TestCase):
     def setUp(self):
         with catalog._lock:
@@ -233,7 +266,7 @@ class Finder(unittest.TestCase):
             items = finder.results("cozy fall fit", count=4)
         self.assertEqual(len(stub.calls), 1)
         unique = len({p["name"].lower() for p in catalog.candidates(parse("fall fashion"), False, [])})
-        self.assertEqual(stub.calls[0][1], unique, "no constraints → whole catalog (one line per product name) offered")
+        self.assertEqual(stub.calls[0][1], min(unique, ranker.AI_POOL), "the model reads a small slice, not the whole catalog")
         self.assertTrue(items and all("fleece" in i["name"].lower() for i in items))
         self.assertLessEqual(len(items), 4)
 
@@ -265,6 +298,82 @@ class Finder(unittest.TestCase):
             finder.results("cozy fall fit", count=4, ai=False)
             self.assertEqual(len(stub.calls), 1, "both answers are cached")
         self.assertTrue(fast)
+
+    def test_instant_keyword_results_first_then_ai_picks_replace_them(self):
+        with StubLLM(want="fleece") as stub:
+            events = list(finder.stream("cozy winter layers"))
+            names = [next(iter(e)) for e in events]
+            self.assertEqual(names, ["items", "ai", "replace", "done"])
+            self.assertTrue(events[0]["items"] and all("by" not in i for i in events[0]["items"]))
+            final = events[2]["replace"]
+            self.assertLessEqual(stub.calls[0][2], ranker.AI_PICKS, "the model is asked for a few picks only")
+            self.assertTrue(all(i["by"] == "stub" for i in final[: stub.calls[0][2]]))
+            self.assertGreater(len(final), stub.calls[0][2], "the rest of the tray is keyword matches")
+            self.assertEqual(len({i["url"] for i in final}), len(final), "no duplicates")
+            again = list(finder.stream("cozy winter layers"))
+            self.assertEqual([next(iter(e)) for e in again], ["items", "done"], "an answered search is instant, no second pass")
+            self.assertEqual(len(stub.calls), 1)
+
+    def test_failed_ai_call_is_not_cached_as_the_ai_answer(self):
+        with StubLLM(fail=True) as down:
+            fallback = finder.results("cozy winter fit", count=4)
+        self.assertTrue(fallback and all("by" not in i for i in fallback), "fallback results are keyword results")
+        class Why(StubLLM):
+            def pick(self, prompt, lines, count):
+                self.calls.append(prompt)
+                return [{"n": 1, "why": "Warm and soft"}]
+        with Why() as up:
+            again = finder.results("cozy winter fit", count=4)
+        self.assertEqual(len(up.calls), 1, "Gemini is asked again once it is back")
+        self.assertEqual(again[0]["by"], "stub")
+
+    def test_shopper_is_told_when_ai_was_asked_but_not_used(self):
+        with StubLLM(fail=True):
+            events = list(finder.stream("cozy autumn fit", count=4))
+        self.assertTrue(events[0]["items"])
+        self.assertIn("stub down", next(e["ai_error"] for e in events if "ai_error" in e))
+        with StubLLM() as ok:
+            events = list(finder.stream("cozy autumn layers", count=4))
+        self.assertFalse(any("ai_error" in e for e in events), "no warning when the AI answered")
+        with StubLLM(fail=True):
+            events = list(finder.stream("cozy autumn fit", count=4, ai=False))
+        self.assertFalse(any("ai_error" in e for e in events), "no warning when the switch is off")
+
+    def test_gemini_reasons_are_one_sentence_and_survive_a_cut_off_reply(self):
+        import gemini
+        self.assertEqual(gemini.one_sentence("Soft fleece for fall. Also cheap and nice."), "Soft fleece for fall.")
+        self.assertLessEqual(len(gemini.one_sentence("x" * 400)), 140)
+        cut = '{"picks": [{"n": 3, "why": "Warm fleece, perfect for fall."}, {"n": 5, "why": "Easy to layer."}, {"n": 9, "why": "Cut o'
+        saved = gemini._post
+        gemini._post = lambda *a, **k: {"candidates": [{"content": {"parts": [{"text": cut}]}}]}
+        try:
+            picks = gemini.pick_products("fall", ["1 | x"], 5)
+        finally:
+            gemini._post = saved
+        self.assertEqual([(p["n"], p["why"]) for p in picks], [(3, "Warm fleece, perfect for fall."), (5, "Easy to layer."), (9, "")])
+
+    def test_ai_picks_carry_who_and_why_even_from_the_cache(self):
+        class Why(StubLLM):
+            def pick(self, prompt, lines, count):
+                self.calls.append(prompt)
+                return [{"n": 1, "why": "Cozy fleece for a chilly day"}, {"n": 2}]
+        with Why() as stub:
+            first = finder.results("cozy fall fit", count=4)
+            again = finder.results("cozy fall fit", count=4)
+        self.assertEqual(len(stub.calls), 1)
+        for items in (first, again):
+            self.assertEqual(items[0]["by"], "stub")
+            self.assertEqual(items[0]["why"], "Cozy fleece for a chilly day")
+            self.assertEqual(items[1]["by"], "stub")
+            self.assertNotIn("why", items[1])
+        keyword = finder.results("cozy fall fit", count=4, ai=False)
+        self.assertTrue(all("by" not in i for i in keyword), "keyword picks are not labelled as AI")
+
+    def test_normalize_keeps_ai_note_for_shared_hauls(self):
+        from products import normalize
+        item = normalize({"name": "Tee", "brand": "X", "price": 5, "by": "gemini", "why": "  Soft and plain  "})
+        self.assertEqual((item["by"], item["why"]), ("gemini", "Soft and plain"))
+        self.assertNotIn("by", normalize({"name": "Tee", "brand": "X", "by": "someone else"}))
 
     def test_stream_shape(self):
         evs = list(finder.stream("shoes under 100 dollars"))

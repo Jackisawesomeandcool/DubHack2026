@@ -18,7 +18,10 @@ import intent as intent_mod
 import llm
 from intent import Intent
 
-MAX_CANDIDATES = 600     # ~15 tokens per line; well inside any current model's context
+# Speed/cost knobs: the model reads at most AI_POOL product lines and names at most AI_PICKS of them (each with a short
+# reason); the rest of the tray is filled with keyword matches. Fewer tokens in and out = a much faster answer.
+AI_POOL = 80
+AI_PICKS = 10
 
 
 def _line(n: int, it: dict) -> str:
@@ -27,30 +30,41 @@ def _line(n: int, it: dict) -> str:
 
 
 def _trim(it: Intent, pool: list[dict], models: bool, exclude: list[str]) -> list[dict]:
-    """Too many candidates: keep the keyword hits first, fill with the rest."""
-    if len(pool) <= MAX_CANDIDATES:
+    """Too many candidates for a quick answer: keyword hits first, then the rest dealt out across categories
+    (so a vague "fall fit" still gets tops, bottoms, shoes and outerwear to choose from)."""
+    if len(pool) <= AI_POOL:
         return pool
-    hits = catalog.search(it, models, exclude, limit=MAX_CANDIDATES)
+    hits = catalog.search(it, models, exclude, limit=AI_POOL)
     seen = {h["url"] for h in hits}
-    return hits + [p for p in pool if p["url"] not in seen][: MAX_CANDIDATES - len(hits)]
+    by_cat: dict[str, list[dict]] = {}
+    for p in pool:
+        if p["url"] not in seen:
+            by_cat.setdefault(p.get("category", ""), []).append(p)
+    fill: list[dict] = []
+    while len(hits) + len(fill) < AI_POOL and any(by_cat.values()):
+        for lst in by_cat.values():
+            if lst and len(hits) + len(fill) < AI_POOL:
+                fill.append(lst.pop(0))
+    return hits + fill
 
 
 def rank(prompt: str, it: Intent, pool: list[dict], count: int, models: bool, exclude: list[str],
-         ai: bool = True) -> tuple[list[dict], str]:
-    """(picked items best first, source) where source is the provider name or 'keywords'.
+         ai: bool = True) -> tuple[list[dict], str, str]:
+    """(picked items best first, source, ai_error) where source is the provider name or 'keywords'; ai_error is a
+    short reason when the AI was asked but its answer was not used (the shopper is told), else ''.
     ai=False is the shopper's "AI-powered fits" switch turned off: instant keyword ranking, no model call."""
     if not pool:
-        return [], "none"
+        return [], "none", ""
     if not ai or not llm.configured():
-        return catalog.search(it, models, exclude, limit=count), "keywords"
+        return catalog.search(it, models, exclude, limit=count), "keywords", ""
 
     pool = _trim(it, pool, models, exclude)
     t0 = time.time()
     try:
-        picks = llm.pick_products(prompt, [_line(i + 1, p) for i, p in enumerate(pool)], count)
+        picks = llm.pick_products(prompt, [_line(i + 1, p) for i, p in enumerate(pool)], min(count, AI_PICKS))
     except llm.LLMError as err:
         print(f"[ranker] {llm.provider()} failed ({err}); keyword ranking", file=sys.stderr)
-        return catalog.search(it, models, exclude, limit=count), "keywords"
+        return catalog.search(it, models, exclude, limit=count), "keywords", str(err)[:140]
 
     out, seen = [], set()
     for p in picks:
@@ -61,6 +75,9 @@ def rank(prompt: str, it: Intent, pool: list[dict], count: int, models: bool, ex
         if not intent_mod.matches(item, it):        # belt and braces: the LLM cannot un-filter
             continue
         seen.add(n)
+        item = {**item, "by": llm.provider()}      # shown as "Suggested by Gemini" with the reason, when there is one
+        if p.get("why"):
+            item["why"] = str(p["why"]).strip()[:160]
         out.append(item)
         if p.get("why"):
             print(f"[ranker]   {item['name']} — {p['why']}", file=sys.stderr)
@@ -71,7 +88,10 @@ def rank(prompt: str, it: Intent, pool: list[dict], count: int, models: bool, ex
         # The AI named nothing usable (empty list, or numbers outside the list). The catalog does have
         # candidates within the hard filters, so fall back rather than show an empty tray.
         print(f"[ranker] {llm.provider()} returned no usable picks ({len(picks)} raw); keyword ranking", file=sys.stderr)
-        return catalog.search(it, models, exclude, limit=count), "keywords"
+        return catalog.search(it, models, exclude, limit=count), "keywords", "it didn't pick anything usable"
+    # The model named its best few; keyword matches follow so the tray still fills up (they carry no AI label).
+    have = {i["url"] for i in out}
+    out += [k for k in catalog.search(it, models, exclude, limit=count) if k["url"] not in have][: max(0, count - len(out))]
     if it.sort == "price_asc":
         out.sort(key=lambda i: i.get("price") or 1e9)
-    return out, llm.provider()
+    return out, llm.provider(), ""

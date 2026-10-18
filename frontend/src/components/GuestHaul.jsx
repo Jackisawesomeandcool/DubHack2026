@@ -6,6 +6,7 @@ import FashionCanvas from './FashionCanvas.jsx';
 import { loadShare } from '../lib/api.js';
 import { fitTotal, withPositions } from '../lib/haul.js';
 import ThemeControl from './ThemeControl.jsx';
+import StoreLinks from './StoreLinks.jsx';
 
 // Read-only view of a shared haul: same board, same hover and click, no finder.
 export default function GuestHaul({ shareId }) {
@@ -29,6 +30,7 @@ export default function GuestHaul({ shareId }) {
         <div className="bar__right">
           <HaulTotal total={total} />
           <ThemeControl />
+          <StoreLinks fit={fit} />
         </div>
       </header>
 

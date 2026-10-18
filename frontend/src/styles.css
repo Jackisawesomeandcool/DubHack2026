@@ -508,6 +508,9 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .tray__row::-webkit-scrollbar { display: none; }
 .tray__msg { margin: 10px 8px; font-size: 14px; color: var(--ink-3); }
 .tray__note { margin: 4px 8px 0; font-size: 12px; color: var(--ink-3); }
+.tray__note--pending { animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+.tray__note--ai { color: var(--warn-ink); background: var(--warn-bg); padding: 4px 10px; border-radius: var(--r-sm); width: fit-content; max-width: calc(100% - 16px); }
 .tray__close {
   flex: none;
   height: 26px; padding: 0 12px;
@@ -1446,7 +1449,9 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 [data-theme="midnight"] .chip__art img,
 [data-theme="maroon"] .chip__art img,
 [data-theme="midnight"] .item__art img,
-[data-theme="maroon"] .item__art img { mix-blend-mode: normal; }
+[data-theme="maroon"] .item__art img,
+[data-theme="midnight"] .links__art img,
+[data-theme="maroon"] .links__art img { mix-blend-mode: normal; }
 
 /* tray header tools: favorites toggle + zoom in, one group at the right */
 .tray__tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
@@ -1462,3 +1467,111 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 .tray__empty strong { color: var(--ink-2); font-size: 14px; }
 .tray__emptystar { font-size: 22px; line-height: 1; opacity: 0.6; }
+
+/* ------------------------------------------------------------------ AI pick note (popup + tray marker) */
+.popup__ai {
+  margin-top: 10px;
+  padding: 9px 11px 10px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.popup__ai-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.popup__ai-tag svg { color: var(--accent); }
+.popup__ai-why { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
+.chip__ai {
+  position: absolute;
+  top: 2px; left: 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ account: privacy controls */
+.account__sep { height: 1px; margin: 4px 6px; background: var(--line); }
+.account__item--danger { color: var(--out); }
+.account__confirm { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; width: 272px; max-width: calc(100vw - 48px); }
+.account__confirm strong { font-size: 14px; }
+.account__confirm p { margin: 0; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
+.account__error { color: var(--out) !important; }
+.account__confirm-row { display: flex; gap: 8px; margin-top: 6px; }
+.account__cancel, .account__danger {
+  flex: 1;
+  white-space: nowrap;
+  height: 38px;
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 700;
+}
+.account__cancel { background: var(--surface); color: var(--ink); }
+.account__cancel:hover:not(:disabled) { background: var(--hover); }
+.account__danger { background: var(--out); color: #fff; }
+.account__danger:hover:not(:disabled) { filter: brightness(1.08); }
+.account__cancel:disabled, .account__danger:disabled { opacity: 0.5; cursor: default; }
+
+/* ------------------------------------------------------------------ store links window (beside Share) */
+.links { position: relative; display: flex; align-items: center; }
+.links__btn {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease), opacity var(--fast);
+}
+.links__btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.links__btn:active:not(:disabled) { transform: scale(0.97); }
+.links__btn:disabled { opacity: 0.45; cursor: default; }
+.links__btn.is-open { box-shadow: var(--shadow-md), 0 0 0 1.5px var(--ink); }
+.links__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 92;
+  width: min(340px, calc(100vw - 24px));
+  padding: 6px;
+  background: var(--paper);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md), 0 0 0 1px var(--line);
+  animation: popIn 180ms var(--ease);
+}
+.links__head { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink-3); }
+.links__copy { font-size: 12px; font-weight: 700; color: var(--ink); text-decoration: underline; }
+.links__list { list-style: none; margin: 0; padding: 0; max-height: min(360px, 52vh); overflow-y: auto; }
+.links__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 6px;
+  border-radius: var(--r-sm);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--fast);
+}
+a.links__row:hover { background: var(--surface); }
+.links__art { flex: none; width: 44px; height: 44px; display: grid; place-items: center; }
+.links__art img { width: 44px; height: 44px; object-fit: contain; mix-blend-mode: multiply; }
+.links__text { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.links__name { font-size: 13.5px; font-weight: 650; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links__sub { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links__out { font-style: normal; color: var(--out); }
+.links__go { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 12px; font-weight: 700; color: var(--ink-3); white-space: nowrap; }
+.links__go strong { font-size: 13.5px; color: var(--ink); }
+.links__total { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 4px 0; padding: 10px 8px 6px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+.links__total strong { font-size: 17px; color: var(--ink); }
+@media (max-width: 760px) {
+  .links__btn { height: 40px; padding: 0 14px; }
+  .links__menu { position: fixed; top: 68px; left: 12px; right: 12px; width: auto; }
+}

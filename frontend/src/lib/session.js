@@ -2,6 +2,8 @@
 // The browser keeps only a session token and a cached copy of the signed-in
 // user so pages can render the name before the backend answers.
 
+import { freezeSaves, thawSaves } from './api.js';
+
 const USER = 'haul:user';
 const TOKEN = 'haul:token';
 const GUEST = 'haul:guest';
@@ -65,6 +67,32 @@ export async function signUp({ firstName, username, email, password }) {
 
 export async function logOut() {
   try { if (token()) await call('logout', {}); } catch { /* the token is dropped either way */ }
+  write(USER, null);
+  write(TOKEN, null);
+  write(GUEST, null);
+}
+
+// Privacy controls (Account menu). Both end with the page reloading on a clean slate.
+// clearMyData: saved favorites, hauls and search history go (on the account and in this browser); the account stays.
+// deleteAccount: all of that plus the account and every session; shared links already made stay viewable.
+function wipeLocal() {
+  try { localStorage.removeItem('haul:favorites'); } catch { /* nothing to remove */ }
+}
+
+export async function clearMyData() {
+  freezeSaves();
+  try {
+    if (token()) await call('clear-data', {});
+  } catch (err) { thawSaves(); throw err; }
+  wipeLocal();
+}
+
+export async function deleteAccount() {
+  freezeSaves();
+  try {
+    await call('delete-account', {});
+  } catch (err) { thawSaves(); throw err; }
+  wipeLocal();
   write(USER, null);
   write(TOKEN, null);
   write(GUEST, null);

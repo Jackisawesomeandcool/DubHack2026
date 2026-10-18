@@ -1,7 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { aiName } from '../lib/ai.js';
 
 const GAP = 30;
 const MARGIN = 12;
+
+function Sparkle() {
+  return (
+    <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+      <path d="M10 2.5l1.7 4.6 4.6 1.7-4.6 1.7L10 15.1l-1.7-4.6L3.7 8.8l4.6-1.7z M16 13l.8 2.2 2.2.8-2.2.8L16 19l-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor" />
+    </svg>
+  );
+}
 
 function host(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'listing'; }
@@ -72,6 +81,12 @@ export default function ProductPopup({ item, anchor, onClose, onRemove, favorite
     >
       <div className="popup__name">{item.name}</div>
       <div className="popup__brand">{item.brand}</div>
+      {aiName(item) && (
+        <div className="popup__ai">
+          <span className="popup__ai-tag"><Sparkle />Suggested by {aiName(item)}!</span>
+          {item.why && <p className="popup__ai-why">{item.why}</p>}
+        </div>
+      )}
       <div className="popup__row">
         <div className={`popup__stock${inStock ? '' : ' is-out'}`}>
           <span className="popup__dot" />

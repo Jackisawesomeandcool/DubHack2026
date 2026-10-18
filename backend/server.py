@@ -177,6 +177,16 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/api/auth/logout":
                 auth.logout(self._token())
                 return self._json(HTTPStatus.OK, {"ok": True})
+            if self.path in ("/api/auth/clear-data", "/api/auth/delete-account"):
+                user = auth.user_for(self._token())
+                if not user:
+                    return self._json(HTTPStatus.UNAUTHORIZED, {"error": "not signed in"})
+                if self.path.endswith("clear-data"):
+                    auth.clear_data(user["id"])
+                else:
+                    auth.delete_account(user["id"])
+                    print(f"[auth] account @{user['username']} deleted", file=sys.stderr)
+                return self._json(HTTPStatus.OK, {"ok": True})
         except auth.AuthError as err:
             return self._json(HTTPStatus.BAD_REQUEST, {"error": str(err)})
         return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})

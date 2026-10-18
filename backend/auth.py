@@ -228,6 +228,37 @@ def count() -> int:
         return _db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
 
 
+# ---------------------------------------------------------------- deleting what the user stored
+def clear_data(user_id: int) -> None:
+    """Remove the user's saved favorites, hauls and search history; the account stays."""
+    if _remote():
+        import auth_kv
+        try:
+            return auth_kv.clear_data(user_id)
+        except kv.KVError as err:
+            raise AuthError("Couldn't clear your data right now — try again in a moment.") from err
+    with _lock:
+        _db().execute("DELETE FROM state WHERE user_id=?", (user_id,))
+        _db().commit()
+
+
+def delete_account(user_id: int) -> None:
+    """Remove the account, every session and everything saved with it. Share links already created are
+    anonymous snapshots (not tied to an account) and stay viewable."""
+    if _remote():
+        import auth_kv
+        try:
+            return auth_kv.delete_account(user_id)
+        except kv.KVError as err:
+            raise AuthError("Couldn't delete the account right now — try again in a moment.") from err
+    with _lock:
+        db = _db()
+        db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+        db.execute("DELETE FROM state WHERE user_id=?", (user_id,))
+        db.execute("DELETE FROM users WHERE id=?", (user_id,))
+        db.commit()
+
+
 # ---------------------------------------------------------------- per-user state
 MAX_STATE_BYTES = 2_000_000
 MAX_STATE_BYTES_REMOTE = 900_000   # Upstash's free plan caps a request at 1 MB

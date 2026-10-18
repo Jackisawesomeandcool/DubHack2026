@@ -33,7 +33,11 @@ def _public(u: dict) -> dict:
 
 def _new_session(user: dict) -> str:
     token = secrets.token_urlsafe(32)
-    kv.set_json(f"{P}sess:{token}", _public(user), "EX", _auth().SESSION_TTL)
+    ttl = _auth().SESSION_TTL
+    # the per-user set lets "delete account" sign out every device, not just this one
+    kv.pipeline(["SET", f"{P}sess:{token}", json.dumps(_public(user), separators=(",", ":")), "EX", ttl],
+                ["SADD", f"{P}usess:{user['id']}", token],
+                ["EXPIRE", f"{P}usess:{user['id']}", ttl])
     return token
 
 
@@ -81,6 +85,22 @@ def logout(token: str) -> None:
 
 def count() -> int:
     return int(kv.cmd("GET", P + "uid") or 0)
+
+
+def clear_data(user_id: int) -> None:
+    kv.cmd("DEL", f"{P}state:{user_id}")
+
+
+def delete_account(user_id: int) -> None:
+    user = kv.get_json(f"{P}user:{user_id}") or {}
+    tokens = kv.cmd("SMEMBERS", f"{P}usess:{user_id}") or []
+    cmds = [["DEL", f"{P}state:{user_id}"], ["DEL", f"{P}user:{user_id}"], ["DEL", f"{P}usess:{user_id}"]]
+    if user.get("username"):
+        cmds.append(["DEL", f"{P}name:{user['username']}"])
+    if user.get("email"):
+        cmds.append(["DEL", f"{P}mail:{user['email']}"])
+    cmds += [["DEL", f"{P}sess:{t}"] for t in tokens]
+    kv.pipeline(*cmds)
 
 
 def get_state(user_id: int) -> dict:
