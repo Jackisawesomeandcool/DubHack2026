@@ -19,7 +19,7 @@ export function formatPrice(value) {
 }
 
 export function fitLabel(index) {
-  return `FIT ${String(index + 1).padStart(2, '0')}`;
+  return `FIT ${index + 1}`;
 }
 
 export function itemKey(item) {

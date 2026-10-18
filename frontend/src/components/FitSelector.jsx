@@ -12,7 +12,8 @@ export default function FitSelector({ fits, current, onSelect, onAdd }) {
           aria-pressed={i === current}
           onClick={() => onSelect(i)}
         >
-          {fitLabel(i)}
+          <span className="fit__label">{fitLabel(i)}</span>
+          <span className="fit__hl" aria-hidden="true">{fitLabel(i)}</span>
         </button>
       ))}
       {onAdd && fits.length < MAX_FITS && (

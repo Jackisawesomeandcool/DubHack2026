@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { fitLabel } from '../lib/haul.js';
 
-// Moving background + giant faded fit number, and the palette switcher.
+// Moving background and the palette switcher.
 // Each fit has its own palette (index % PALETTES). When the fit changes, a thick black
 // jagged band sweeps across the screen and the palette swaps while it covers everything.
 const PALETTES = 5;
@@ -29,9 +28,7 @@ export default function Backdrop({ index = 0 }) {
 
   return (
     <>
-      <div className="backdrop" aria-hidden="true">
-        <span className="backdrop__word" key={shown}>{fitLabel(shown)}</span>
-      </div>
+      <div className="backdrop" aria-hidden="true" />
       {wipe > 0 && (
         <div className="wipe" key={wipe} aria-hidden="true">
           <div className="wipe__band wipe__band--edge" />
