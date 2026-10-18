@@ -98,6 +98,7 @@ export default function FashionCanvas({
           anchor={selected.anchor}
           onClose={close}
           onRemove={editable ? () => { onRemove?.(selectedItem); close(); } : undefined}
+          boundsRef={ref}
           favorite={isFavorite ? isFavorite(selectedItem) : null}
           onFavorite={onFavorite ? () => onFavorite(selectedItem) : undefined}
         />
